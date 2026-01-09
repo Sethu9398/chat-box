@@ -12,42 +12,33 @@ function ChatWindow({ user }) {
       className="d-flex flex-column position-relative"
       style={{ height: "100vh" }}
     >
-      {/* HEADER — STICKY TOP */}
-      <div
-        className="position-sticky top-0"
-        style={{ zIndex: 1020 }}
-      >
-        <ChatHeader
-          user={user}
-          onOpenInfo={() => setShowInfo(true)}
-        />
+      {/* HEADER */}
+      <div className="position-sticky top-0" style={{ zIndex: 1020 }}>
+        <ChatHeader user={user} onOpenInfo={() => setShowInfo(true)} />
       </div>
 
-      {/* MESSAGES — ONLY THIS SCROLLS */}
+      {/* MESSAGES */}
       <div
         className="flex-grow-1 overflow-auto"
         style={{ background: "#e5ddd5" }}
       >
-        <ChatMessages user={user} />
+        <ChatMessages chatId={user.chatId} />
       </div>
 
-      {/* INPUT — STICKY BOTTOM */}
+      {/* INPUT */}
       <div
         className="position-sticky bottom-0 bg-white border-top"
         style={{ zIndex: 1020 }}
       >
-        <ChatInput />
+        <ChatInput chatId={user.chatId} />
       </div>
 
-      {/* RIGHT DRAWER */}
       {showInfo && (
-        <ChatInfoDrawer
-          user={user}
-          onClose={() => setShowInfo(false)}
-        />
+        <ChatInfoDrawer user={user} onClose={() => setShowInfo(false)} />
       )}
     </div>
   );
 }
 
 export default ChatWindow;
+

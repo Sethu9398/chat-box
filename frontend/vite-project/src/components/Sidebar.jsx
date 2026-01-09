@@ -7,103 +7,54 @@ import {
 import ProfileModal from "./ProfileModal";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import { logoutUser } from "../features/auth/authSlice";
+import { useGetSidebarUsersQuery } from "../features/users/userApi";
+import { setSelectedUser } from "../features/chat/chatSlice";
+import defaultprofile from "../../../../Asset/userDB.avif";
 
-
-/* ===============================
-   🕒 LAST SEEN FORMATTER
-   =============================== */
+/* LAST SEEN FORMATTER */
 const formatLastSeen = (lastSeen) => {
   if (!lastSeen) return "";
-
-  const now = new Date();
-  const seen = new Date(lastSeen);
-  const diffMs = now - seen;
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHr = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHr / 24);
-
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHr < 24) return `${diffHr}h ago`;
-  if (diffDay === 1) return "Yesterday";
-
-  return seen.toLocaleDateString("en-US", {
+  const diff = Date.now() - new Date(lastSeen);
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.floor(mins / 60)}h ago`;
+  return new Date(lastSeen).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
 };
 
-function Sidebar({ onUserSelect }) {
+function Sidebar() {
   const [showProfile, setShowProfile] = useState(false);
   const [search, setSearch] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [theme, setTheme] = useState("light");
 
+  const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  /* ===============================
-     THEME TOGGLE
-     =============================== */
+  const currentUser = useSelector((state) => state.auth.user);
+
+  const {
+    data: users = [],
+    isLoading,
+    isError,
+  } = useGetSidebarUsersQuery();
+
   const toggleTheme = () => {
-    setTheme((prev) => {
-      const next = prev === "light" ? "dark" : "light";
-      document.body.classList.toggle("dark", next === "dark");
-      return next;
-    });
+    const next = theme === "light" ? "dark" : "light";
+    document.body.classList.toggle("dark", next === "dark");
+    setTheme(next);
     setShowMenu(false);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("currentUser");
+    dispatch(logoutUser());
     navigate("/login");
   };
-
-  /* ===============================
-     CURRENT USER
-     =============================== */
-  const currentUser = JSON.parse(
-    localStorage.getItem("currentUser") ||
-      JSON.stringify({
-        name: "Demo User",
-        avatar: "https://i.pravatar.cc/150?img=10",
-      })
-  );
-
-  /* ===============================
-     USERS WITH REAL lastSeen TIME
-     =============================== */
-  const users = [
-    {
-      id: 1,
-      name: "John",
-      avatar: "https://i.pravatar.cc/100?img=1",
-      lastMessage: "Hey! How are you?",
-      unreadCount: 2,
-      chatId: "chat-1",
-      isOnline: true,
-      lastSeen: null,
-    },
-    {
-      id: 2,
-      name: "Sarah",
-      avatar: "https://i.pravatar.cc/100?img=2",
-      lastMessage: "Let's meet tomorrow",
-      unreadCount: 0,
-      chatId: "chat-2",
-      isOnline: false,
-      lastSeen: Date.now() - 1000 * 60 * 45, // 45 mins ago
-    },
-    {
-      id: 3,
-      name: "Alex",
-      avatar: "https://i.pravatar.cc/100?img=3",
-      lastMessage: "Okay 👍",
-      unreadCount: 1,
-      chatId: "chat-3",
-      isOnline: false,
-      lastSeen: Date.now() - 1000 * 60 * 60 * 5, // 5 hrs ago
-    },
-  ];
 
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(search.toLowerCase())
@@ -118,7 +69,7 @@ function Sidebar({ onUserSelect }) {
 
           <div className="d-flex align-items-center position-relative">
             <img
-              src={currentUser.avatar}
+              src={currentUser?.avatar || defaultprofile}
               className="rounded-circle"
               width="40"
               height="40"
@@ -136,12 +87,7 @@ function Sidebar({ onUserSelect }) {
             {showMenu && (
               <div
                 className="position-absolute end-0 bg-white shadow rounded"
-                style={{
-                  top: "100%",
-                  marginTop: "8px",
-                  width: "180px",
-                  zIndex: 2000,
-                }}
+                style={{ top: "100%", marginTop: 8, width: 180, zIndex: 2000 }}
               >
                 <div
                   className="px-3 py-2 d-flex align-items-center"
@@ -180,15 +126,25 @@ function Sidebar({ onUserSelect }) {
 
       {/* USERS */}
       <div className="flex-grow-1 overflow-auto">
+        {isLoading && (
+          <p className="text-center mt-3 text-muted">Loading chats…</p>
+        )}
+
+        {isError && (
+          <p className="text-center mt-3 text-danger">
+            Failed to load users
+          </p>
+        )}
+
         {filteredUsers.map((u) => (
           <div
-            key={u.id}
+            key={u._id}
             className="d-flex align-items-center p-2 border-bottom"
             style={{ cursor: "pointer" }}
-            onClick={() => onUserSelect(u)}
+            onClick={() => dispatch(setSelectedUser(u))}
           >
             <img
-              src={u.avatar}
+              src={u.avatar || defaultprofile}
               width="45"
               height="45"
               className="rounded-circle me-2"
@@ -198,15 +154,14 @@ function Sidebar({ onUserSelect }) {
             <div className="flex-grow-1">
               <strong>{u.name}</strong>
               <div className="text-muted small text-truncate">
-                {u.lastMessage}
+                {u.lastMessage || "No messages yet"}
               </div>
             </div>
 
-            {/* ✅ WhatsApp-style RIGHT SIDE */}
-            <div className="text-end ms-2" style={{ minWidth: "65px" }}>
+            <div className="text-end ms-2" style={{ minWidth: 65 }}>
               <div
                 style={{
-                  fontSize: "11px",
+                  fontSize: 11,
                   color: u.isOnline ? "#28a745" : "#999",
                 }}
               >
@@ -214,17 +169,7 @@ function Sidebar({ onUserSelect }) {
               </div>
 
               {u.unreadCount > 0 && (
-                <span
-                  className="badge bg-success rounded-circle mt-1"
-                  style={{
-                    width: "20px",
-                    height: "20px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "11px",
-                  }}
-                >
+                <span className="badge bg-success rounded-circle mt-1">
                   {u.unreadCount}
                 </span>
               )}
@@ -244,5 +189,3 @@ function Sidebar({ onUserSelect }) {
 }
 
 export default Sidebar;
-
-

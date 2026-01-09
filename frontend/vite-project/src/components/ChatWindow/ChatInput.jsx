@@ -1,44 +1,29 @@
 import { useState, useRef } from "react";
+import { useSelector } from "react-redux";
 import { FaSmile, FaPaperclip } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
+import socket from "../../socket";
 
-function ChatInput() {
+function ChatInput({ chatId }) {
   const [msg, setMsg] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
-
   const inputRef = useRef(null);
-  const fileInputRef = useRef(null);
 
-  /* 😀 Emoji insert (multiple allowed) */
-  const handleEmojiClick = (emojiData) => {
-    if (!inputRef.current) return;
+  const me = useSelector((state) => state.auth.user);
 
-    const cursorPos = inputRef.current.selectionStart;
-    const updated =
-      msg.slice(0, cursorPos) +
-      emojiData.emoji +
-      msg.slice(cursorPos);
+  const sendMessage = () => {
+    if (!msg.trim() || !chatId) return;
 
-    setMsg(updated);
+    const message = {
+      chatId,
+      sender: me._id,
+      text: msg,
+      type: "text",
+      createdAt: new Date().toISOString(),
+    };
 
-    // keep focus for multiple emojis
-    setTimeout(() => {
-      inputRef.current.focus();
-      inputRef.current.selectionStart =
-        inputRef.current.selectionEnd =
-        cursorPos + emojiData.emoji.length;
-    }, 0);
-  };
-
-  /* 📎 File picker */
-  const handleFileClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    console.log("Selected files:", files);
-    e.target.value = "";
+    socket.emit("send-message", message);
+    setMsg("");
   };
 
   return (
@@ -46,33 +31,17 @@ function ChatInput() {
       className="border-top p-2 position-relative"
       style={{ backgroundColor: "#f0f2f5" }}
     >
-      {/* Emoji Picker */}
       {showEmoji && (
-        <div
-          className="position-absolute bottom-100 mb-2"
-          style={{ zIndex: 2000 }}
-        >
+        <div className="position-absolute bottom-100 mb-2" style={{ zIndex: 2000 }}>
           <EmojiPicker
-            onEmojiClick={handleEmojiClick}
+            onEmojiClick={(e) => setMsg((p) => p + e.emoji)}
             height={350}
             width={300}
           />
         </div>
       )}
 
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar"
-        className="d-none"
-        onChange={handleFileChange}
-      />
-
-      {/* INPUT BAR */}
       <div className="d-flex align-items-center gap-2">
-        {/* WhatsApp input wrapper */}
         <div
           className="d-flex align-items-center flex-grow-1 px-3"
           style={{
@@ -81,45 +50,32 @@ function ChatInput() {
             height: "44px",
           }}
         >
-          {/* Emoji icon */}
           <FaSmile
             className="text-muted me-3"
             style={{ cursor: "pointer", fontSize: "1.2rem" }}
-            title="Emoji"
-            onClick={() => setShowEmoji((prev) => !prev)}
+            onClick={() => setShowEmoji((p) => !p)}
           />
 
-          {/* File icon */}
           <FaPaperclip
             className="text-muted me-3"
             style={{ cursor: "pointer", fontSize: "1.2rem" }}
-            title="Attach file"
-            onClick={handleFileClick}
           />
 
-          {/* Text input */}
           <input
             ref={inputRef}
             className="border-0 bg-transparent flex-grow-1"
             value={msg}
             onChange={(e) => setMsg(e.target.value)}
             placeholder="Type a message"
-            style={{
-              outline: "none",
-              fontSize: "0.95rem",
-            }}
+            style={{ outline: "none", fontSize: "0.95rem" }}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           />
         </div>
 
-        {/* Send button */}
         <button
           className="btn btn-success"
-          style={{
-            borderRadius: "50%",
-            width: "44px",
-            height: "44px",
-          }}
-          onClick={() => setMsg("")}
+          style={{ borderRadius: "50%", width: "44px", height: "44px" }}
+          onClick={sendMessage}
           disabled={!msg.trim()}
         >
           ➤

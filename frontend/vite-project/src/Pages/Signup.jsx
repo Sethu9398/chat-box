@@ -1,12 +1,9 @@
 import { useSignupMutation } from "../features/auth/authApi";
-import { useDispatch } from "react-redux";
-import { setUser } from "../features/auth/authSlice";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 const Signup = () => {
   const [signup, { isLoading }] = useSignupMutation();
-  const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const [preview, setPreview] = useState(null);
@@ -17,9 +14,8 @@ const Signup = () => {
     const formData = new FormData(e.target);
 
     try {
-      const res = await signup(formData).unwrap()
-      dispatch(setUser(res.user));
-      navigate("/");
+      await signup(formData).unwrap()
+      navigate("/login");
     } catch (err) {
       alert(err?.data?.message || "Signup failed");
     }

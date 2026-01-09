@@ -1,41 +1,43 @@
 const express = require("express");
-const cookieParser = require("cookie-parser");
+const http = require("http");
+const { Server } = require("socket.io");
 const cors = require("cors");
 const connectDB = require("./config/db");
+const cookieParser = require("cookie-parser");
+
+const messageRoutes = require("./routes/messageRoutes");
+const userRoutes = require("./routes/userRoutes");
 const authRoutes = require("./routes/authRoutes");
-const userRoutes=require("./routes/userRoutes")
+const socketServer = require("./socket/socket");
 
 require("dotenv").config();
-
 connectDB();
+
 const app = express();
+const server = http.createServer(app);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
-
-app.use(
-  cors({
+const io = new Server(server, {
+  cors: {
     origin: "http://localhost:5173",
     credentials: true,
-  })
-);
+  },
+});
 
+app.use(express.json());
+app.use(cookieParser());
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 
-
-app.use("/auth", authRoutes);
+app.use("/auth",authRoutes)
 app.use("/users",userRoutes)
+app.use("/messages", messageRoutes);
 
 app.get("/", (req, res) => {
-  res.send("Hello World");
-});
+  res.send("API is running...");
+})
 
-app.use((err, req, res, next) => {
-  console.error("GLOBAL ERROR ❌:", err.message);
-  res.status(500).json({ message: err.message || "Server error" });
-});
 
-app.listen(process.env.PORT, () => {
-  console.log("Server is running on port 5000");
-});
+socketServer(io);
+
+server.listen(process.env.PORT, () =>
+  console.log("🚀 Server + Socket running on port 5000")
+);

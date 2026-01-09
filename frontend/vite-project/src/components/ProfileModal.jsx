@@ -1,7 +1,7 @@
-
-
-
 import { useState, useRef, useEffect } from "react";
+import { useUpdateProfileMutation } from "../features/users/userApi";
+import { useDispatch } from "react-redux";
+import { setUser } from "../features/auth/authSlice";
 
 function ProfileModal({ user, onClose, onSuccess }) {
   const [name, setName] = useState("");
@@ -11,26 +11,24 @@ function ProfileModal({ user, onClose, onSuccess }) {
   const [avatarFile, setAvatarFile] = useState(null);
 
   const fileInputRef = useRef(null);
+  const dispatch = useDispatch();
 
-  // Placeholder avatar
+  const [updateProfile, { isLoading }] =
+    useUpdateProfileMutation();
+
   const PLACEHOLDER_AVATAR =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect fill='%23e9ecef' width='120' height='120'/%3E%3Ccircle cx='60' cy='45' r='20' fill='%23adb5bd'/%3E%3Cpath d='M20 100 Q20 70 60 70 Q100 70 100 100' fill='%23adb5bd'/%3E%3C/svg%3E";
 
-  // Sync user data on open
   useEffect(() => {
     if (!user) return;
+    const u = user.user || user;
 
-    const userData = user.user || user;
-
-    setName(userData.name || "");
-    setEmail(userData.email || "");
-    setAbout(userData.about || "Hey there! I am using Chat");
-    setAvatarPreview(userData.avatar || null);
+    setName(u.name || "");
+    setEmail(u.email || "");
+    setAbout(u.about || "");
+    setAvatarPreview(u.avatar || null);
   }, [user]);
 
-  /* =========================
-     IMAGE HANDLERS (DUMMY)
-     ========================= */
   const handleImageClick = () => {
     fileInputRef.current?.click();
   };
@@ -39,42 +37,36 @@ function ProfileModal({ user, onClose, onSuccess }) {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert("File is too large. Maximum size is 10MB.");
-      return;
-    }
-
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
   };
 
-  /* =========================
-     SAVE (DUMMY)
-     ========================= */
-  const handleSave = () => {
+  // 🔥 REAL SAVE
+  const handleSave = async () => {
     if (!name.trim()) {
       alert("Name cannot be empty");
       return;
     }
 
-    const currentUser =
-      JSON.parse(localStorage.getItem("currentUser")) || {};
+    try {
+      const formData = new FormData();
+      formData.append("name", name.trim());
+      formData.append("about", about.trim());
+      if (avatarFile) {
+        formData.append("avatar", avatarFile);
+      }
 
-    const updatedUser = {
-      ...currentUser,
-      name: name.trim(),
-      email,
-      about: about.trim(),
-      avatar: avatarPreview || currentUser.avatar,
-    };
+      const res = await updateProfile(formData).unwrap();
 
-    localStorage.setItem("currentUser", JSON.stringify(updatedUser));
+      dispatch(setUser(res.user));
+      if (onSuccess) onSuccess(res.user);
 
-    alert("✅ Profile updated successfully (dummy)");
-
-    if (onSuccess) onSuccess(updatedUser);
-
-    window.location.reload();
+      alert("✅ Profile updated successfully");
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to update profile");
+    }
   };
 
   return (
@@ -178,8 +170,9 @@ function ProfileModal({ user, onClose, onSuccess }) {
               <button
                 className="btn btn-success"
                 onClick={handleSave}
+                disabled={isLoading}
               >
-                Save
+                {isLoading ? "Saving..." : "Save"}
               </button>
             </div>
 

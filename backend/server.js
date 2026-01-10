@@ -38,6 +38,6 @@ app.get("/", (req, res) => {
 
 socketServer(io);
 
-server.listen(process.env.PORT, () =>
-  console.log("🚀 Server + Socket running on port 5000")
+server.listen(process.env.PORT || 5000, () =>
+  console.log("🚀 Server + Socket running on port", process.env.PORT || 5000)
 );

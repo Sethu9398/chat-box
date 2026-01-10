@@ -16,8 +16,8 @@ const getSidebarUsers = async (req, res) => {
       .select("name avatar email about isOnline lastSeen");
 
     const chats = await Chat.find({
-      participants: loggedInUserId,
-    });
+      participants: { $in: [loggedInUserId] },
+    }).populate("lastMessage", "text");
 
     const sidebarUsers = users.map((user) => {
       const chat = chats.find((c) =>
@@ -35,7 +35,7 @@ const getSidebarUsers = async (req, res) => {
         isOnline: user.isOnline,
         lastSeen: user.lastSeen,
         chatId: chat?._id || null,
-        lastMessage: chat?.lastMessage || "",
+        lastMessage: chat?.lastMessage?.text || "No messages yet",
         unreadCount:
           chat?.unreadCount?.get(loggedInUserId.toString()) || 0,
       };

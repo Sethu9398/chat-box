@@ -1,11 +1,24 @@
 import Sidebar from "../components/Sidebar";
 import ChatWindow from "../components/ChatWindow/ChatWindow";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { useEffect } from "react";
+import { setSelectedUser } from "../features/chat/chatSlice";
+import { useGetOrCreateChatMutation } from "../features/chat/chatApi";
 
 function Home() {
+  const dispatch = useDispatch();
   const selectedUser = useSelector(
     (state) => state.chat.selectedUser
   );
+  const [getOrCreateChat] = useGetOrCreateChatMutation();
+
+  useEffect(() => {
+    if (selectedUser && !selectedUser.chatId) {
+      getOrCreateChat(selectedUser._id).unwrap().then((chat) => {
+        dispatch(setSelectedUser({ ...selectedUser, chatId: chat._id }));
+      });
+    }
+  }, [selectedUser, getOrCreateChat, dispatch]);
 
   return (
     <div className="d-flex h-100 w-100" style={{ height: "100vh" }}>

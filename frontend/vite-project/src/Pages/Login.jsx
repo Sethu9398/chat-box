@@ -3,6 +3,7 @@ import { useDispatch } from "react-redux";
 import { setUser } from "../features/auth/authSlice";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { userApi } from "../features/users/userApi";
 
 const Login = () => {
   const [login, { isLoading }] = useLoginMutation();
@@ -20,6 +21,7 @@ const Login = () => {
     try {
       const res = await login({ email, password }).unwrap();
       dispatch(setUser(res.user));
+      dispatch(userApi.util.invalidateTags(["User"]));
       navigate("/");
     } catch (err) {
       setError(err?.data?.message || "Login failed");

@@ -5,11 +5,11 @@ import {
   FaSignOutAlt,
 } from "react-icons/fa";
 import ProfileModal from "./ProfileModal";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { logoutUser } from "../features/auth/authSlice";
-import { useGetSidebarUsersQuery } from "../features/users/userApi";
+import { useGetSidebarUsersQuery, userApi } from "../features/users/userApi";
 import { setSelectedUser } from "../features/chat/chatSlice";
 import defaultprofile from "../../../../Asset/userDB.avif";
 
@@ -53,6 +53,7 @@ function Sidebar() {
 
   const handleLogout = () => {
     dispatch(logoutUser());
+    dispatch(userApi.util.invalidateTags(["User"]));
     navigate("/login");
   };
 

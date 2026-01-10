@@ -3,7 +3,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 export const chatApi = createApi({
   reducerPath: "chatApi",
   baseQuery: fetchBaseQuery({
-    baseUrl: "http://localhost:5000",
+    baseUrl: import.meta.env.VITE_API_URL || "http://localhost:5000",
     credentials: "include",
   }),
   endpoints: (builder) => ({
@@ -12,7 +12,7 @@ export const chatApi = createApi({
     }),
     getOrCreateChat: builder.mutation({
       query: (userId) => ({
-        url: `/chat/${userId}`,
+        url: `/messages/chat/${userId}`,
         method: "GET",
       }),
     }),

@@ -5,20 +5,25 @@ const Chat = require("../models/Chat");
    GET OR CREATE CHAT
 ========================= */
 const getOrCreateChat = async (req, res) => {
-  const myId = req.user._id;
-  const { userId } = req.params;
+  try {
+    const myId = req.user._id;
+    const { userId } = req.params;
 
-  let chat = await Chat.findOne({
-    participants: { $all: [myId, userId] },
-  });
-
-  if (!chat) {
-    chat = await Chat.create({
-      participants: [myId, userId],
+    let chat = await Chat.findOne({
+      participants: { $all: [myId, userId] },
     });
-  }
 
-  res.json(chat);
+    if (!chat) {
+      chat = await Chat.create({
+        participants: [myId, userId],
+      });
+    }
+
+    res.json(chat);
+  } catch (err) {
+    console.error("❌ GET OR CREATE CHAT ERROR:", err);
+    res.status(500).json({ message: "Failed to get or create chat" });
+  }
 };
 
 /* =========================

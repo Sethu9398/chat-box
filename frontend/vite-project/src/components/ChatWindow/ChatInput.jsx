@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useSelector } from "react-redux";
 import { FaSmile, FaPaperclip } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
-import socket from "../../socket";
+import socket from "../../socketClient";
 
 function ChatInput({ chatId }) {
   const [msg, setMsg] = useState("");
@@ -12,43 +12,30 @@ function ChatInput({ chatId }) {
   const me = useSelector((state) => state.auth.user);
 
   const sendMessage = () => {
-    if (!msg.trim() || !chatId) return;
+    if (!msg.trim() || !chatId || !me?._id) return;
 
-    const message = {
+    socket.emit("send-message", {
       chatId,
       sender: me._id,
-      text: msg,
       type: "text",
-      createdAt: new Date().toISOString(),
-    };
+      text: msg.trim(),
+    });
 
-    socket.emit("send-message", message);
     setMsg("");
   };
 
   return (
-    <div
-      className="border-top p-2 position-relative"
-      style={{ backgroundColor: "#f0f2f5" }}
-    >
+    <div className="border-top p-2 position-relative" style={{ backgroundColor: "#f0f2f5" }}>
       {showEmoji && (
         <div className="position-absolute bottom-100 mb-2" style={{ zIndex: 2000 }}>
-          <EmojiPicker
-            onEmojiClick={(e) => setMsg((p) => p + e.emoji)}
-            height={350}
-            width={300}
-          />
+          <EmojiPicker onEmojiClick={(e) => setMsg((p) => p + e.emoji)} />
         </div>
       )}
 
       <div className="d-flex align-items-center gap-2">
         <div
           className="d-flex align-items-center flex-grow-1 px-3"
-          style={{
-            backgroundColor: "#ffffff",
-            borderRadius: "999px",
-            height: "44px",
-          }}
+          style={{ backgroundColor: "#ffffff", borderRadius: "999px", height: "44px" }}
         >
           <FaSmile
             className="text-muted me-3"
@@ -56,10 +43,7 @@ function ChatInput({ chatId }) {
             onClick={() => setShowEmoji((p) => !p)}
           />
 
-          <FaPaperclip
-            className="text-muted me-3"
-            style={{ cursor: "pointer", fontSize: "1.2rem" }}
-          />
+          <FaPaperclip className="text-muted me-3" />
 
           <input
             ref={inputRef}

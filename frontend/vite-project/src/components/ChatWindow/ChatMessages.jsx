@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import socket from "../../socket";
+import socket from "../../socketClient";
 import { useGetMessagesQuery } from "../../features/messages/messageApi";
 
 function ChatMessages({ chatId }) {
@@ -11,22 +11,31 @@ function ChatMessages({ chatId }) {
   const me = useSelector((state) => state.auth.user);
   const [messages, setMessages] = useState([]);
 
-  /* LOAD INITIAL MESSAGES */
+  /* ✅ RESET MESSAGES WHEN CHAT CHANGES */
   useEffect(() => {
-    if (data.length) {
-      setMessages(data);
-    }
+    setMessages([]);
   }, [chatId]);
 
-  /* SOCKET RECEIVE */
+  /* ✅ LOAD MESSAGES WHEN DATA ARRIVES */
   useEffect(() => {
+    if (chatId && data) {
+      setMessages(data);
+    }
+  }, [data]);
+
+  /* ✅ SOCKET RECEIVE (ONLY CURRENT CHAT) */
+  useEffect(() => {
+    if (!chatId) return;
+
     const handler = (msg) => {
-      setMessages((prev) => [...prev, msg]);
+      if (msg.chatId === chatId) {
+        setMessages((prev) => [...prev, msg]);
+      }
     };
 
     socket.on("new-message", handler);
     return () => socket.off("new-message", handler);
-  }, []);
+  }, [chatId]);
 
   if (isLoading) {
     return (
@@ -62,7 +71,7 @@ function ChatMessages({ chatId }) {
                 boxShadow: "0 1px 1px rgba(0,0,0,0.15)",
               }}
             >
-              {m.text && <div>{m.text}</div>}
+              <div>{m.text}</div>
 
               <div
                 style={{

@@ -1,0 +1,5 @@
+- [ ] Update ChatMessages.jsx to conditionally render content based on message.type:
+  - "text": render m.text
+  - "image": render <img src={m.mediaUrl} />
+  - "video": render <video src={m.mediaUrl} controls />
+  - "file": render download link with m.fileName and m.fileSize

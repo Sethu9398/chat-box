@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSelector } from "react-redux";
 import socket from "../../socketClient";
 import { useGetMessagesQuery } from "../../features/messages/messageApi";
@@ -9,33 +9,35 @@ function ChatMessages({ chatId }) {
   });
 
   const me = useSelector((state) => state.auth.user);
-  const [messages, setMessages] = useState([]);
+  const [socketMessages, setSocketMessages] = useState([]);
 
-  /* ✅ RESET MESSAGES WHEN CHAT CHANGES */
+  /* RESET WHEN CHAT CHANGES */
   useEffect(() => {
-    setMessages([]);
+    setSocketMessages([]);
   }, [chatId]);
 
-  /* ✅ LOAD MESSAGES WHEN DATA ARRIVES */
-  useEffect(() => {
-    if (chatId && data) {
-      setMessages(data);
-    }
-  }, [data]);
-
-  /* ✅ SOCKET RECEIVE (ONLY CURRENT CHAT) */
+  /* SOCKET RECEIVE */
   useEffect(() => {
     if (!chatId) return;
 
     const handler = (msg) => {
       if (msg.chatId === chatId) {
-        setMessages((prev) => [...prev, msg]);
+        setSocketMessages((prev) => [...prev, msg]);
       }
     };
 
     socket.on("new-message", handler);
     return () => socket.off("new-message", handler);
   }, [chatId]);
+
+  /* COMBINE AND DEDUPLICATE MESSAGES */
+  const messages = useMemo(() => {
+    const allMessages = [...data, ...socketMessages];
+    const uniqueMessages = allMessages.filter(
+      (msg, index, self) => self.findIndex((m) => m._id === msg._id) === index
+    );
+    return uniqueMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  }, [data, socketMessages]);
 
   if (isLoading) {
     return (
@@ -44,6 +46,17 @@ function ChatMessages({ chatId }) {
       </div>
     );
   }
+
+  /* ✅ WHATSAPP-LIKE MEDIA SIZE */
+  const mediaStyle = {
+    maxWidth: "260px",
+    maxHeight: "260px",
+    width: "auto",
+    height: "auto",
+    borderRadius: "8px",
+    objectFit: "cover",
+    cursor: "pointer",
+  };
 
   return (
     <div
@@ -71,8 +84,44 @@ function ChatMessages({ chatId }) {
                 boxShadow: "0 1px 1px rgba(0,0,0,0.15)",
               }}
             >
-              <div>{m.text}</div>
+              {/* TEXT */}
+              {m.type === "text" && <div>{m.text}</div>}
 
+              {/* IMAGE */}
+              {m.type === "image" && m.mediaUrl && (
+                <img
+                  src={m.mediaUrl}
+                  alt={m.fileName}
+                  style={mediaStyle}
+                  onClick={() => window.open(m.mediaUrl, "_blank")}
+                />
+              )}
+
+              {/* VIDEO */}
+              {m.type === "video" && m.mediaUrl && (
+                <video
+                  src={m.mediaUrl}
+                  controls
+                  style={mediaStyle}
+                />
+              )}
+
+              {/* FILE */}
+              {m.type === "file" && m.mediaUrl && (
+                <a
+                  href={m.mediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "#007bff",
+                    textDecoration: "none",
+                  }}
+                >
+                  📄 {m.fileName} ({m.fileSize})
+                </a>
+              )}
+
+              {/* TIME */}
               <div
                 style={{
                   fontSize: "11px",

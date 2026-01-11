@@ -1,13 +1,15 @@
+// middleware/messageUpload.js
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../config/cloudinary");
 
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: (req, file) => ({
+  params: async (req, file) => ({
     folder: "chat/messages",
-    resource_type: "auto", // ✅ image / video / raw
+    resource_type: "auto", // image | video | raw
     public_id: `msg-${Date.now()}`,
+    secure: true, // Force HTTPS URLs
   }),
 });
 

@@ -40,6 +40,39 @@ const getMessages = async (req, res) => {
 };
 
 /* =========================
+   SEND TEXT MESSAGE
+========================= */
+const sendMessage = async (req, res) => {
+  try {
+    const { chatId, text } = req.body;
+
+    const message = await Message.create({
+      chatId,
+      sender: req.user._id,
+      type: "text",
+      text,
+    });
+
+    await Chat.findByIdAndUpdate(chatId, {
+      lastMessage: message._id,
+    });
+
+    const populated = await message.populate(
+      "sender",
+      "name avatar"
+    );
+
+    // 🔥 IMPORTANT: SEND TO SOCKET CLIENTS
+    req.io.to(chatId.toString()).emit("new-message", populated);
+
+    res.status(201).json(populated);
+  } catch (err) {
+    console.error("❌ SEND MESSAGE ERROR:", err);
+    res.status(500).json({ message: "Message send failed" });
+  }
+};
+
+/* =========================
    UPLOAD MEDIA MESSAGE
 ========================= */
 const uploadMessage = async (req, res) => {
@@ -50,11 +83,15 @@ const uploadMessage = async (req, res) => {
       return res.status(400).json({ message: "No file uploaded" });
     }
 
+    // ✅ SAFE CLOUDINARY URL
+    const mediaUrl =
+      req.file.secure_url || req.file.path || "";
+
     const message = await Message.create({
       chatId,
       sender: req.user._id,
-      type, // image | video | file
-      mediaUrl: req.file.path, // ✅ Cloudinary URL
+      type,
+      mediaUrl,
       fileName: req.file.originalname,
       fileSize: `${(req.file.size / 1024 / 1024).toFixed(2)} MB`,
     });
@@ -63,7 +100,13 @@ const uploadMessage = async (req, res) => {
       lastMessage: message._id,
     });
 
-    const populated = await message.populate("sender", "name avatar");
+    const populated = await message.populate(
+      "sender",
+      "name avatar"
+    );
+
+    // 🔥 IMPORTANT: SEND TO SOCKET CLIENTS
+    req.io.to(chatId.toString()).emit("new-message", populated);
 
     res.status(201).json(populated);
   } catch (err) {
@@ -75,5 +118,6 @@ const uploadMessage = async (req, res) => {
 module.exports = {
   getOrCreateChat,
   getMessages,
+  sendMessage,
   uploadMessage,
 };

@@ -4,7 +4,7 @@ import { FaSmile, FaPaperclip } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 import socket from "../../socketClient";
 
-function ChatInput({ chatId }) {
+function ChatInput({ chatId, onOpenAttachment }) {
   const [msg, setMsg] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const inputRef = useRef(null);
@@ -43,7 +43,12 @@ function ChatInput({ chatId }) {
             onClick={() => setShowEmoji((p) => !p)}
           />
 
-          <FaPaperclip className="text-muted me-3" />
+          {/* ✅ OPEN MODAL (NO ROUTE) */}
+          <FaPaperclip
+            className="text-muted me-3"
+            style={{ cursor: "pointer", fontSize: "1.2rem" }}
+            onClick={onOpenAttachment}
+          />
 
           <input
             ref={inputRef}

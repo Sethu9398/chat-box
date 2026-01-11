@@ -10,7 +10,21 @@ export const messageApi = createApi({
     getMessages: builder.query({
       query: (chatId) => `/messages/${chatId}`,
     }),
+    sendMessage: builder.mutation({
+      query: ({ chatId, text }) => ({
+        url: "/messages",
+        method: "POST",
+        body: { chatId, text },
+      }),
+    }),
+     uploadMessage: builder.mutation({
+      query: (formData) => ({
+        url: "/messages/upload",
+        method: "POST",
+        body: formData,
+      }),
+    })
   }),
 });
 
-export const { useGetMessagesQuery } = messageApi;
+export const { useGetMessagesQuery, useSendMessageMutation, useUploadMessageMutation } = messageApi;

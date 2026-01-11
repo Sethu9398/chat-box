@@ -1,24 +1,25 @@
+// routes/messageRoutes.js
 const express = require("express");
 const protect = require("../middleware/authMiddleware");
 const messageUpload = require("../middleware/messageUpload");
+const attachIO = require("../middleware/attachIO");
 const {
-  getOrCreateChat,
-  getMessages,
   uploadMessage,
+  getMessages,
+  getOrCreateChat,
+  sendMessage,
 } = require("../controllers/messageController");
 
 const router = express.Router();
 
-/* CHAT */
 router.get("/chat/:userId", protect, getOrCreateChat);
-
-/* GET MESSAGES */
 router.get("/:chatId", protect, getMessages);
 
-/* MEDIA MESSAGE */
+router.post("/", protect, attachIO, sendMessage);
+
 router.post(
   "/upload",
-  protect,
+  protect,attachIO,
   messageUpload.single("file"),
   uploadMessage
 );

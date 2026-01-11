@@ -35,8 +35,11 @@ app.get("/", (req, res) => {
   res.send("API is running...");
 })
 
+app.set("io", io);
+
 
 socketServer(io);
+
 
 server.listen(process.env.PORT || 5000, () =>
   console.log("🚀 Server + Socket running on port", process.env.PORT || 5000)

@@ -1,6 +1,4 @@
-- [x] Identify the issue: 500 Internal Server Error on file upload
-- [x] Analyze code: Found that multer was not parsing form fields correctly
-- [x] Fix multer configuration: Changed to messageUpload.any() to handle form-data
-- [x] Update controller: Changed to use req.files[0] instead of req.file
-- [ ] Test the upload functionality
-- [ ] Verify that messages are updating in the chat
+- [x] Update ChatInfoDrawer.jsx to import useEffect and useGetOrCreateChatMutation
+- [x] Add logic to fetch chat using getOrCreateChat mutation when user changes
+- [x] Update useGetMessagesQuery to use chat?._id instead of user?.chatId
+- [x] Test that Media, links and docs now show data

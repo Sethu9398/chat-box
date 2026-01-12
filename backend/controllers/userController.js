@@ -98,4 +98,25 @@ const updateProfile = async (req, res) => {
   }
 };
 
-module.exports = { getSidebarUsers, updateProfile };
+/**
+ * GET user details by ID
+ * GET /users/:id
+ */
+const getUserDetails = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await User.findById(userId).select("name email about avatar isOnline lastSeen");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json(user);
+  } catch (err) {
+    console.error("GET USER DETAILS ERROR ❌", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+module.exports = { getSidebarUsers, updateProfile, getUserDetails };

@@ -14,6 +14,12 @@ export const userApi = createApi({
       providesTags: ["User"],
     }),
 
+    // ✅ GET user details by ID
+    getUserDetails: builder.query({
+      query: (userId) => `/users/${userId}`,
+      providesTags: ["User"],
+    }),
+
     // ✅ UPDATE profile
     updateProfile: builder.mutation({
       query: (formData) => ({
@@ -29,5 +35,6 @@ export const userApi = createApi({
 // ✅ EXPORT HOOKS
 export const {
   useGetSidebarUsersQuery,
+  useGetUserDetailsQuery,
   useUpdateProfileMutation,
 } = userApi;

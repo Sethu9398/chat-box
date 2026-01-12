@@ -1,15 +1,20 @@
-import { useEffect, useState, useMemo } from "react";
-import { useSelector } from "react-redux";
+import { useEffect, useState, useMemo, useRef, useLayoutEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import socket from "../../socketClient";
 import { useGetMessagesQuery } from "../../features/messages/messageApi";
+import { userApi } from "../../features/users/userApi";
 
 function ChatMessages({ chatId }) {
   const { data = [], isLoading } = useGetMessagesQuery(chatId, {
     skip: !chatId,
+    refetchOnMountOrArgChange: true,
   });
 
+  const dispatch = useDispatch();
   const me = useSelector((state) => state.auth.user);
   const [socketMessages, setSocketMessages] = useState([]);
+  const lastMessageRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
   /* RESET WHEN CHAT CHANGES */
   useEffect(() => {
@@ -21,7 +26,7 @@ function ChatMessages({ chatId }) {
     if (!chatId) return;
 
     const handler = (msg) => {
-      if (msg.chatId === chatId) {
+      if (msg.chatId.toString() === chatId) {
         setSocketMessages((prev) => [...prev, msg]);
       }
     };
@@ -38,6 +43,13 @@ function ChatMessages({ chatId }) {
     );
     return uniqueMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   }, [data, socketMessages]);
+
+  /* AUTO SCROLL TO BOTTOM WHEN MESSAGES UPDATE */
+  useLayoutEffect(() => {
+    if (lastMessageRef.current) {
+      lastMessageRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   if (isLoading) {
     return (
@@ -60,15 +72,17 @@ function ChatMessages({ chatId }) {
 
   return (
     <div
+      ref={messagesContainerRef}
       className="flex-grow-1 overflow-auto"
       style={{ padding: "16px", backgroundColor: "#e5ddd5" }}
     >
-      {messages.map((m) => {
+      {messages.map((m, index) => {
         const isMe = m.sender?._id === me?._id;
 
         return (
           <div
             key={m._id}
+            ref={index === messages.length - 1 ? lastMessageRef : null}
             className={`mb-2 d-flex ${
               isMe ? "justify-content-end" : "justify-content-start"
             }`}
@@ -90,7 +104,7 @@ function ChatMessages({ chatId }) {
               {/* IMAGE */}
               {m.type === "image" && m.mediaUrl && (
                 <img
-                  src={m.mediaUrl}
+                  src={`${m.mediaUrl}?t=${Date.now()}`}
                   alt={m.fileName}
                   style={mediaStyle}
                   onClick={() => window.open(m.mediaUrl, "_blank")}

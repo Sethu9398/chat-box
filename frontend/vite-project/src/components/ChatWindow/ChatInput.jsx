@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useSelector } from "react-redux";
 import { FaSmile, FaPaperclip } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
-import socket from "../../socketClient";
+import { useSendMessageMutation } from "../../features/messages/messageApi";
 
 function ChatInput({ chatId, onOpenAttachment }) {
   const [msg, setMsg] = useState("");
@@ -10,18 +10,17 @@ function ChatInput({ chatId, onOpenAttachment }) {
   const inputRef = useRef(null);
 
   const me = useSelector((state) => state.auth.user);
+  const [sendMessageMutation] = useSendMessageMutation();
 
-  const sendMessage = () => {
-    if (!msg.trim() || !chatId || !me?._id) return;
+  const sendMessage = async () => {
+    if (!msg.trim() || !chatId) return;
 
-    socket.emit("send-message", {
-      chatId,
-      sender: me._id,
-      type: "text",
-      text: msg.trim(),
-    });
-
-    setMsg("");
+    try {
+      await sendMessageMutation({ chatId, text: msg.trim() }).unwrap();
+      setMsg("");
+    } catch (error) {
+      console.error("Failed to send message:", error);
+    }
   };
 
   return (

@@ -15,12 +15,12 @@ const router = express.Router();
 router.get("/chat/:userId", protect, getOrCreateChat);
 router.get("/:chatId", protect, getMessages);
 
-router.post("/", protect, attachIO, sendMessage);
+router.post("/", protect, sendMessage);
 
 router.post(
   "/upload",
-  protect,attachIO,
-  messageUpload.single("file"),
+  protect,
+  messageUpload.single("file"), // ✅ FIX
   uploadMessage
 );
 

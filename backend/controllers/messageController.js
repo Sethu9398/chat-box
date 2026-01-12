@@ -62,8 +62,12 @@ const sendMessage = async (req, res) => {
       "name avatar"
     );
 
+    // Convert chatId to string for socket emission
+    populated.chatId = populated.chatId.toString();
+
     // 🔥 IMPORTANT: SEND TO SOCKET CLIENTS
-    req.io.to(chatId.toString()).emit("new-message", populated);
+    req.app.get("io").to(chatId.toString()).emit("new-message", populated);
+    req.app.get("io").emit("sidebar-update");
 
     res.status(201).json(populated);
   } catch (err) {
@@ -80,12 +84,13 @@ const uploadMessage = async (req, res) => {
     const { chatId, type } = req.body;
 
     if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
+      return res.status(400).json({
+        message: "No file uploaded",
+      });
     }
 
-    // ✅ SAFE CLOUDINARY URL
-    const mediaUrl =
-      req.file.secure_url || req.file.path || "";
+    // ✅ CORRECT CLOUDINARY URL
+    const mediaUrl = req.file.path;
 
     const message = await Message.create({
       chatId,
@@ -105,15 +110,19 @@ const uploadMessage = async (req, res) => {
       "name avatar"
     );
 
-    // 🔥 IMPORTANT: SEND TO SOCKET CLIENTS
-    req.io.to(chatId.toString()).emit("new-message", populated);
+    // 🔥 REALTIME UPDATES
+    req.app.get("io").to(chatId.toString()).emit("new-message", populated);
+    req.app.get("io").emit("sidebar-update");
 
     res.status(201).json(populated);
   } catch (err) {
     console.error("❌ UPLOAD MESSAGE ERROR:", err);
-    res.status(500).json({ message: "Message upload failed" });
+    res.status(500).json({
+      message: "File upload to Cloudinary failed",
+    });
   }
 };
+
 
 module.exports = {
   getOrCreateChat,

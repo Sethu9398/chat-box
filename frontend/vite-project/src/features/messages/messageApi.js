@@ -9,6 +9,7 @@ export const messageApi = createApi({
   endpoints: (builder) => ({
     getMessages: builder.query({
       query: (chatId) => `/messages/${chatId}`,
+      providesTags: ["Messages"],
     }),
     sendMessage: builder.mutation({
       query: ({ chatId, text }) => ({
@@ -16,13 +17,16 @@ export const messageApi = createApi({
         method: "POST",
         body: { chatId, text },
       }),
+      invalidatesTags: ["Messages"],
     }),
      uploadMessage: builder.mutation({
       query: (formData) => ({
         url: "/messages/upload",
         method: "POST",
         body: formData,
+        formData: true,
       }),
+      invalidatesTags: ["Messages"],
     })
   }),
 });

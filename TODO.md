@@ -1,5 +1,6 @@
-- [ ] Update ChatMessages.jsx to conditionally render content based on message.type:
-  - "text": render m.text
-  - "image": render <img src={m.mediaUrl} />
-  - "video": render <video src={m.mediaUrl} controls />
-  - "file": render download link with m.fileName and m.fileSize
+- [x] Identify the issue: 500 Internal Server Error on file upload
+- [x] Analyze code: Found that multer was not parsing form fields correctly
+- [x] Fix multer configuration: Changed to messageUpload.any() to handle form-data
+- [x] Update controller: Changed to use req.files[0] instead of req.file
+- [ ] Test the upload functionality
+- [ ] Verify that messages are updating in the chat

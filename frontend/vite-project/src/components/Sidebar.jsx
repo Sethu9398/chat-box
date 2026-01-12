@@ -11,6 +11,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { logoutUser } from "../features/auth/authSlice";
 import { useGetSidebarUsersQuery, userApi } from "../features/users/userApi";
 import { setSelectedUser } from "../features/chat/chatSlice";
+import socket from "../socketClient";
 import defaultprofile from "../../../../Asset/userDB.avif";
 
 /* LAST SEEN FORMATTER */
@@ -44,6 +45,16 @@ function Sidebar() {
     isError,
   } = useGetSidebarUsersQuery();
 
+  /* REAL-TIME SIDEBAR UPDATES */
+  useEffect(() => {
+    const handler = () => {
+      dispatch(userApi.util.invalidateTags(["User"]));
+    };
+
+    socket.on("sidebar-update", handler);
+    return () => socket.off("sidebar-update", handler);
+  }, [dispatch]);
+
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
     document.body.classList.toggle("dark", next === "dark");
@@ -60,6 +71,12 @@ function Sidebar() {
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  const getLastMessage = (msg) => {
+  if (!msg) return "No messages yet";
+  if (typeof msg === "string") return msg;
+  return "Message";
+};
 
   return (
     <div className="d-flex flex-column h-100 bg-white">
@@ -155,7 +172,7 @@ function Sidebar() {
             <div className="flex-grow-1">
               <strong>{u.name}</strong>
               <div className="text-muted small text-truncate">
-                {u.lastMessage || "No messages yet"}
+               {getLastMessage(u.lastMessage)}
               </div>
             </div>
 
@@ -169,7 +186,7 @@ function Sidebar() {
                 {u.isOnline ? "Online" : formatLastSeen(u.lastSeen)}
               </div>
 
-              {u.unreadCount > 0 && (
+              {Number(u.unreadCount) > 0 && (
                 <span className="badge bg-success rounded-circle mt-1">
                   {u.unreadCount}
                 </span>

@@ -17,6 +17,18 @@ function ChatWindow({ user }) {
     }
   }, [user?.chatId]);
 
+  // ✅ REJOIN ON RECONNECT
+  useEffect(() => {
+    const handleConnect = () => {
+      if (user?.chatId) {
+        socket.emit("join-chat", user.chatId);
+      }
+    };
+
+    socket.on("connect", handleConnect);
+    return () => socket.off("connect", handleConnect);
+  }, [user?.chatId]);
+
   if (!user) return null;
 
   return (

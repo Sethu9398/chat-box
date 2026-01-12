@@ -9,15 +9,18 @@ const cloudinary = require("../config/cloudinary");
  */
 const getSidebarUsers = async (req, res) => {
   try {
-    const loggedInUserId = req.user._id;
+    const myId = req.user._id;
 
-    // ✅ FIX: include email & about
-    const users = await User.find({ _id: { $ne: loggedInUserId } })
-      .select("name avatar email about isOnline lastSeen");
+    const users = await User.find({ _id: { $ne: myId } })
+      .select("name avatar isOnline lastSeen");
 
     const chats = await Chat.find({
-      participants: { $in: [loggedInUserId] },
-    }).populate("lastMessage", "text");
+      participants: myId,
+    })
+      .populate({
+        path: "lastMessage",
+        select: "text type fileName",
+      });
 
     const sidebarUsers = users.map((user) => {
       const chat = chats.find((c) =>
@@ -26,24 +29,35 @@ const getSidebarUsers = async (req, res) => {
         )
       );
 
+      let lastMessageText = "No messages yet";
+
+      if (chat?.lastMessage) {
+        const m = chat.lastMessage;
+
+        if (m.type === "text") lastMessageText = m.text;
+        else if (m.type === "image") lastMessageText = "📷 Photo";
+        else if (m.type === "video") lastMessageText = "🎥 Video";
+        else if (m.type === "file") lastMessageText = "📎 File";
+      }
+
       return {
         _id: user._id,
         name: user.name,
         avatar: user.avatar,
-        email: user.email,
-        about: user.about,
         isOnline: user.isOnline,
         lastSeen: user.lastSeen,
+
         chatId: chat?._id || null,
-        lastMessage: chat?.lastMessage?.text || "No messages yet",
-        unreadCount:
-          chat?.unreadCount?.get(loggedInUserId.toString()) || 0,
+        lastMessage: lastMessageText,
+
+        // ✅ TEMP unread logic (0 for now)
+        unreadCount: 0,
       };
     });
 
     res.status(200).json(sidebarUsers);
-  } catch (error) {
-    console.error("SIDEBAR USERS ERROR ❌", error);
+  } catch (err) {
+    console.error("SIDEBAR ERROR ❌", err);
     res.status(500).json({ message: "Server error" });
   }
 };

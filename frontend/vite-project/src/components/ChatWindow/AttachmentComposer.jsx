@@ -41,8 +41,9 @@ function AttachmentComposer({ chatId, onClose }) {
     try {
       await uploadMessage(formData).unwrap();
       onClose(); // ✅ close modal safely
-    } catch {
-      alert("Upload failed");
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Upload failed. Please try again.");
     }
   };
 

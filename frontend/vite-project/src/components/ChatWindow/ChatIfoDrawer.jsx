@@ -32,8 +32,8 @@ function ChatInfoDrawer({ user, onClose }) {
   const messages = Array.isArray(messageResponse)
     ? messageResponse
     : Array.isArray(messageResponse?.messages)
-    ? messageResponse.messages
-    : [];
+      ? messageResponse.messages
+      : [];
 
   /* ================= MEDIA EXTRACTION ================= */
   const {
@@ -116,8 +116,8 @@ function ChatInfoDrawer({ user, onClose }) {
                 {user?.isOnline
                   ? "Online"
                   : user?.lastSeen
-                  ? `Last seen ${new Date(user.lastSeen).toLocaleString()}`
-                  : "Offline"}
+                    ? `Last seen ${new Date(user.lastSeen).toLocaleString()}`
+                    : "Offline"}
               </p>
             </div>
 
@@ -205,11 +205,10 @@ function ChatInfoDrawer({ user, onClose }) {
               {["media", "docs"].map((t) => (
                 <button
                   key={t}
-                  className={`flex-fill py-2 border-0 bg-transparent ${
-                    activeTab === t
+                  className={`flex-fill py-2 border-0 bg-transparent ${activeTab === t
                       ? "border-bottom border-primary border-2"
                       : ""
-                  }`}
+                    }`}
                   onClick={() => setActiveTab(t)}
                 >
                   {t === "media" ? "Media" : "Docs"}
@@ -274,13 +273,22 @@ function ChatInfoDrawer({ user, onClose }) {
                     documents.map((m) => (
                       <div
                         key={m._id}
-                        className="d-flex justify-content-between mb-2"
+                        className="d-flex align-items-center mb-2"
                       >
-                        <span>{m.fileName}</span>
+                        {/* FILE NAME */}
+                        <div
+                          className="flex-grow-1 me-2 text-truncate"
+                          style={{ minWidth: 0 }}
+                          title={m.fileName}
+                        >
+                          {m.fileName}
+                        </div>
+
+                        {/* DOWNLOAD */}
                         <a
                           href={m.mediaUrl}
                           download
-                          className="btn btn-sm btn-outline-primary"
+                          className="btn btn-sm btn-outline-primary flex-shrink-0"
                         >
                           Download
                         </a>

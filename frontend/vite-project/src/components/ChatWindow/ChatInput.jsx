@@ -4,7 +4,7 @@ import { FaSmile, FaPaperclip } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 import { useSendMessageMutation } from "../../features/messages/messageApi";
 
-function ChatInput({ chatId, onOpenAttachment }) {
+function ChatInput({ chatId, onOpenAttachment, replyTo, onCancelReply }) {
   const [msg, setMsg] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const inputRef = useRef(null);
@@ -16,8 +16,14 @@ function ChatInput({ chatId, onOpenAttachment }) {
     if (!msg.trim() || !chatId) return;
 
     try {
-      await sendMessageMutation({ chatId, text: msg.trim() }).unwrap();
+      await sendMessageMutation({
+        chatId,
+        text: msg.trim(),
+        replyTo: replyTo?._id,
+        isForwarded: false,
+      }).unwrap();
       setMsg("");
+      onCancelReply?.();
     } catch (error) {
       console.error("Failed to send message:", error);
     }
@@ -28,6 +34,34 @@ function ChatInput({ chatId, onOpenAttachment }) {
       {showEmoji && (
         <div className="position-absolute bottom-100 mb-2" style={{ zIndex: 2000 }}>
           <EmojiPicker onEmojiClick={(e) => setMsg((p) => p + e.emoji)} />
+        </div>
+      )}
+
+      {/* REPLY PREVIEW */}
+      {replyTo && (
+        <div
+          className="mb-2 p-2 rounded"
+          style={{
+            backgroundColor: "#e3f2fd",
+            borderLeft: "3px solid #2196f3",
+            position: "relative",
+          }}
+        >
+          <div className="d-flex justify-content-between align-items-start">
+            <div className="flex-grow-1">
+              <strong>{replyTo.sender?.name}:</strong>{" "}
+              {replyTo.type === "text"
+                ? replyTo.text
+                : `Media: ${replyTo.type}`}
+            </div>
+            <button
+              className="btn btn-sm btn-outline-secondary ms-2"
+              onClick={onCancelReply}
+              style={{ fontSize: "12px", padding: "2px 6px" }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 

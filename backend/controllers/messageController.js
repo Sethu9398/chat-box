@@ -34,6 +34,7 @@ const getMessages = async (req, res) => {
 
   const messages = await Message.find({ chatId })
     .populate("sender", "name avatar")
+    .populate("replyTo")
     .sort({ createdAt: 1 });
 
   res.json(messages);
@@ -44,23 +45,28 @@ const getMessages = async (req, res) => {
 ========================= */
 const sendMessage = async (req, res) => {
   try {
-    const { chatId, text } = req.body;
+    const { chatId, text, replyTo, isForwarded, mediaUrl, fileName, fileSize, type } = req.body;
 
     const message = await Message.create({
       chatId,
       sender: req.user._id,
-      type: "text",
+      type: type || "text",
       text,
+      mediaUrl,
+      fileName,
+      fileSize,
+      replyTo: replyTo || null,
+      isForwarded: isForwarded || false,
     });
 
     await Chat.findByIdAndUpdate(chatId, {
       lastMessage: message._id,
     });
 
-    const populated = await message.populate(
-      "sender",
-      "name avatar"
-    );
+    const populated = await message.populate([
+      { path: "sender", select: "name avatar" },
+      { path: "replyTo" }
+    ]);
 
     // Convert chatId to string for socket emission
     populated.chatId = populated.chatId.toString();
@@ -81,7 +87,7 @@ const sendMessage = async (req, res) => {
 ========================= */
 const uploadMessage = async (req, res) => {
   try {
-    const { chatId, type } = req.body;
+    const { chatId, type, replyTo, isForwarded } = req.body;
 
     if (!req.file) {
       return res.status(400).json({
@@ -99,16 +105,18 @@ const uploadMessage = async (req, res) => {
       mediaUrl,
       fileName: req.file.originalname,
       fileSize: `${(req.file.size / 1024 / 1024).toFixed(2)} MB`,
+      replyTo: replyTo || null,
+      isForwarded: isForwarded || false,
     });
 
     await Chat.findByIdAndUpdate(chatId, {
       lastMessage: message._id,
     });
 
-    const populated = await message.populate(
-      "sender",
-      "name avatar"
-    );
+    const populated = await message.populate([
+      { path: "sender", select: "name avatar" },
+      { path: "replyTo" }
+    ]);
 
     // 🔥 REALTIME UPDATES
     req.app.get("io").to(chatId.toString()).emit("new-message", populated);

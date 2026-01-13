@@ -12,10 +12,10 @@ export const messageApi = createApi({
       providesTags: ["Messages"],
     }),
     sendMessage: builder.mutation({
-      query: ({ chatId, text }) => ({
+      query: ({ chatId, text, replyTo, isForwarded, mediaUrl, fileName, fileSize, type }) => ({
         url: "/messages",
         method: "POST",
-        body: { chatId, text },
+        body: { chatId, text, replyTo, isForwarded, mediaUrl, fileName, fileSize, type },
       }),
       invalidatesTags: ["Messages"],
     }),

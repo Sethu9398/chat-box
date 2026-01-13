@@ -9,6 +9,7 @@ import socket from "../../socketClient";
 function ChatWindow({ user }) {
   const [showInfo, setShowInfo] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
+  const [replyTo, setReplyTo] = useState(null);
 
   // ✅ JOIN SOCKET ROOM
   useEffect(() => {
@@ -46,7 +47,7 @@ function ChatWindow({ user }) {
         className="flex-grow-1 overflow-auto"
         style={{ background: "#e5ddd5" }}
       >
-        <ChatMessages chatId={user.chatId} />
+        <ChatMessages chatId={user.chatId} onReply={setReplyTo} />
       </div>
 
       {/* INPUT */}
@@ -57,6 +58,8 @@ function ChatWindow({ user }) {
         <ChatInput
           chatId={user.chatId}
           onOpenAttachment={() => setShowAttachment(true)}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
         />
       </div>
 
@@ -72,7 +75,11 @@ function ChatWindow({ user }) {
       {showAttachment && (
         <AttachmentComposer
           chatId={user.chatId}
-          onClose={() => setShowAttachment(false)}
+          replyTo={replyTo}
+          onClose={() => {
+            setShowAttachment(false);
+            setReplyTo(null); // Clear reply when closing attachment modal
+          }}
         />
       )}
     </div>

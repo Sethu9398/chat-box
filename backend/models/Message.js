@@ -49,6 +49,18 @@ const messageSchema = new mongoose.Schema(
       enum: ["sent", "delivered", "read"],
       default: "sent",
     },
+
+    // REPLY AND FORWARD
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
+    },
+
+    isForwarded: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

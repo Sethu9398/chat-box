@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useUploadMessageMutation } from "../../features/messages/messageApi";
 
-function AttachmentComposer({ chatId, onClose }) {
+function AttachmentComposer({ chatId, replyTo, onClose }) {
   const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -37,6 +37,7 @@ function AttachmentComposer({ chatId, onClose }) {
     formData.append("file", file);
     formData.append("chatId", chatId);
     formData.append("type", type);
+    if (replyTo) formData.append("replyTo", replyTo._id);
 
     try {
       await uploadMessage(formData).unwrap();

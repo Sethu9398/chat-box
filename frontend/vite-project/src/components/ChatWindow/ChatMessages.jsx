@@ -1,242 +1,3 @@
-// import {
-//   useEffect,
-//   useState,
-//   useMemo,
-//   useRef,
-//   useLayoutEffect,
-// } from "react";
-// import { useSelector } from "react-redux";
-// import socket from "../../socketClient";
-// import { useGetMessagesQuery } from "../../features/messages/messageApi";
-
-// function ChatMessages({ chatId }) {
-//   const { data = [], isLoading } = useGetMessagesQuery(chatId, {
-//     skip: !chatId,
-//     refetchOnMountOrArgChange: true,
-//   });
-
-//   const me = useSelector((state) => state.auth.user);
-//   const [socketMessages, setSocketMessages] = useState([]);
-//   const lastMessageRef = useRef(null);
-
-//   /* RESET WHEN CHAT CHANGES */
-//   useEffect(() => {
-//     setSocketMessages([]);
-//   }, [chatId]);
-
-//   /* SOCKET RECEIVE */
-//   useEffect(() => {
-//     if (!chatId) return;
-
-//     const handler = (msg) => {
-//       if (msg.chatId.toString() === chatId) {
-//         setSocketMessages((prev) => [...prev, msg]);
-//       }
-//     };
-
-//     socket.on("new-message", handler);
-//     return () => socket.off("new-message", handler);
-//   }, [chatId]);
-
-//   /* COMBINE + DEDUPE */
-//   const messages = useMemo(() => {
-//     const all = [...data, ...socketMessages];
-//     const unique = all.filter(
-//       (m, i, arr) => arr.findIndex((x) => x._id === m._id) === i
-//     );
-//     return unique.sort(
-//       (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-//     );
-//   }, [data, socketMessages]);
-
-//   /* AUTO SCROLL */
-//   useLayoutEffect(() => {
-//     if (lastMessageRef.current) {
-//       lastMessageRef.current.scrollIntoView({ behavior: "smooth" });
-//     }
-//   }, [messages]);
-
-//   if (isLoading) {
-//     return (
-//       <div className="text-center mt-3 text-muted">
-//         Loading messages...
-//       </div>
-//     );
-//   }
-
-//   /* MEDIA STYLE (UNCHANGED) */
-//   const mediaStyle = {
-//     maxWidth: "260px",
-//     maxHeight: "260px",
-//     borderRadius: "8px",
-//     objectFit: "cover",
-//     cursor: "pointer",
-//   };
-
-//   /* ✅ DATE FORMATTER (WHATSAPP STYLE) */
-//   const formatDateLabel = (date) => {
-//     const msgDate = new Date(date);
-//     const today = new Date();
-//     const yesterday = new Date();
-//     yesterday.setDate(today.getDate() - 1);
-
-//     const isSameDay = (a, b) =>
-//       a.getDate() === b.getDate() &&
-//       a.getMonth() === b.getMonth() &&
-//       a.getFullYear() === b.getFullYear();
-
-//     if (isSameDay(msgDate, today)) return "Today";
-//     if (isSameDay(msgDate, yesterday)) return "Yesterday";
-
-//     const diffDays = Math.floor(
-//       (today - msgDate) / (1000 * 60 * 60 * 24)
-//     );
-
-//     if (diffDays < 7) {
-//       return msgDate.toLocaleDateString("en-US", {
-//         weekday: "long",
-//       });
-//     }
-
-//     return msgDate.toLocaleDateString("en-US", {
-//       month: "short",
-//       day: "numeric",
-//       year:
-//         msgDate.getFullYear() !== today.getFullYear()
-//           ? "numeric"
-//           : undefined,
-//     });
-//   };
-
-//   let lastRenderedDate = null;
-
-//   return (
-//     <div
-//       className="flex-grow-1 overflow-auto"
-//       style={{ padding: "16px", backgroundColor: "#e5ddd5" }}
-//     >
-//       {messages.map((m, index) => {
-//         const isMe = m.sender?._id === me?._id;
-//         const messageDate = new Date(m.createdAt).toDateString();
-//         const showDate =
-//           lastRenderedDate !== messageDate;
-
-//         if (showDate) {
-//           lastRenderedDate = messageDate;
-//         }
-
-//         return (
-//           <div key={m._id}>
-//             {/* ✅ DATE SEPARATOR */}
-//             {showDate && (
-//               <div className="text-center my-2">
-//                 <span
-//                   style={{
-//                     background: "#e1f3fb",
-//                     padding: "4px 12px",
-//                     borderRadius: "12px",
-//                     fontSize: "12px",
-//                     color: "#555",
-//                     boxShadow: "0 1px 1px rgba(0,0,0,0.1)",
-//                   }}
-//                 >
-//                   {formatDateLabel(m.createdAt)}
-//                 </span>
-//               </div>
-//             )}
-
-//             <div
-//               ref={index === messages.length - 1 ? lastMessageRef : null}
-//               className={`mb-2 d-flex ${
-//                 isMe
-//                   ? "justify-content-end"
-//                   : "justify-content-start"
-//               }`}
-//             >
-//               <div
-//                 style={{
-//                   maxWidth: "75%",
-//                   padding: "8px",
-//                   borderRadius: isMe
-//                     ? "18px 18px 4px 18px"
-//                     : "18px 18px 18px 4px",
-//                   backgroundColor: isMe
-//                     ? "#dcf8c6"
-//                     : "#ffffff",
-//                   boxShadow:
-//                     "0 1px 1px rgba(0,0,0,0.15)",
-//                 }}
-//               >
-//                 {/* TEXT */}
-//                 {m.type === "text" && <div>{m.text}</div>}
-
-//                 {/* IMAGE */}
-//                 {m.type === "image" && m.mediaUrl && (
-//                   <img
-//                     src={m.mediaUrl}
-//                     alt={m.fileName}
-//                     style={mediaStyle}
-//                     onClick={() =>
-//                       window.open(m.mediaUrl, "_blank")
-//                     }
-//                   />
-//                 )}
-
-//                 {/* VIDEO */}
-//                 {m.type === "video" && m.mediaUrl && (
-//                   <video
-//                     src={m.mediaUrl}
-//                     controls
-//                     style={mediaStyle}
-//                   />
-//                 )}
-
-//                 {/* FILE */}
-//                 {m.type === "file" && m.mediaUrl && (
-//                   <a
-//                     href={m.mediaUrl}
-//                     target="_blank"
-//                     rel="noopener noreferrer"
-//                     style={{
-//                       color: "#007bff",
-//                       textDecoration: "none",
-//                     }}
-//                   >
-//                     📄 {m.fileName} ({m.fileSize})
-//                   </a>
-//                 )}
-
-//                 {/* TIME */}
-//                 <div
-//                   style={{
-//                     fontSize: "11px",
-//                     textAlign: "right",
-//                     marginTop: "4px",
-//                     color: "#666",
-//                   }}
-//                 >
-//                   {new Date(m.createdAt).toLocaleTimeString(
-//                     [],
-//                     {
-//                       hour: "2-digit",
-//                       minute: "2-digit",
-//                     }
-//                   )}
-//                 </div>
-//               </div>
-//             </div>
-//           </div>
-//         );
-//       })}
-//     </div>
-//   );
-// }
-
-// export default ChatMessages;
-
-
-
-
 import {
   useEffect,
   useState,
@@ -245,11 +6,12 @@ import {
   useLayoutEffect,
 } from "react";
 import { useSelector } from "react-redux";
-import { FaPlay } from "react-icons/fa"; // ✅ PLAY ICON
+import { FaPlay } from "react-icons/fa";
 import socket from "../../socketClient";
 import { useGetMessagesQuery } from "../../features/messages/messageApi";
+import ForwardModal from "./ForwardModal";
 
-function ChatMessages({ chatId }) {
+function ChatMessages({ chatId, onReply }) {
   const { data = [], isLoading } = useGetMessagesQuery(chatId, {
     skip: !chatId,
     refetchOnMountOrArgChange: true,
@@ -258,14 +20,17 @@ function ChatMessages({ chatId }) {
   const me = useSelector((state) => state.auth.user);
   const [socketMessages, setSocketMessages] = useState([]);
   const [preview, setPreview] = useState(null);
+  const [dropdownOpen, setDropdownOpen] = useState(null);
+  const [forwardModal, setForwardModal] = useState(null);
+  const [hoveredMessage, setHoveredMessage] = useState(null);
   const lastMessageRef = useRef(null);
 
-  /* RESET WHEN CHAT CHANGES */
+  /* RESET */
   useEffect(() => {
     setSocketMessages([]);
   }, [chatId]);
 
-  /* SOCKET RECEIVE */
+  /* SOCKET */
   useEffect(() => {
     if (!chatId) return;
 
@@ -279,7 +44,7 @@ function ChatMessages({ chatId }) {
     return () => socket.off("new-message", handler);
   }, [chatId]);
 
-  /* COMBINE + DEDUPE */
+  /* MERGE */
   const messages = useMemo(() => {
     const all = [...data, ...socketMessages];
     const unique = all.filter(
@@ -290,7 +55,7 @@ function ChatMessages({ chatId }) {
     );
   }, [data, socketMessages]);
 
-  /* AUTO SCROLL */
+  /* SCROLL */
   useLayoutEffect(() => {
     lastMessageRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -303,38 +68,12 @@ function ChatMessages({ chatId }) {
     );
   }
 
-  /* MEDIA STYLE (UNCHANGED) */
   const mediaStyle = {
     maxWidth: "260px",
     maxHeight: "260px",
     borderRadius: "8px",
     objectFit: "cover",
     cursor: "pointer",
-  };
-
-  /* DATE FORMATTER */
-  const formatDateLabel = (date) => {
-    const msgDate = new Date(date);
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-
-    const sameDay = (a, b) =>
-      a.getDate() === b.getDate() &&
-      a.getMonth() === b.getMonth() &&
-      a.getFullYear() === b.getFullYear();
-
-    if (sameDay(msgDate, today)) return "Today";
-    if (sameDay(msgDate, yesterday)) return "Yesterday";
-
-    return msgDate.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year:
-        msgDate.getFullYear() !== today.getFullYear()
-          ? "numeric"
-          : undefined,
-    });
   };
 
   let lastRenderedDate = null;
@@ -354,7 +93,6 @@ function ChatMessages({ chatId }) {
 
           return (
             <div key={m._id}>
-              {/* DATE SEPARATOR */}
               {showDate && (
                 <div className="text-center my-2">
                   <span
@@ -363,15 +101,15 @@ function ChatMessages({ chatId }) {
                       padding: "4px 12px",
                       borderRadius: "12px",
                       fontSize: "12px",
-                      color: "#555",
                     }}
                   >
-                    {formatDateLabel(m.createdAt)}
+                    {dateKey}
                   </span>
                 </div>
               )}
 
               <div
+                id={`msg-${m._id}`}
                 ref={index === messages.length - 1 ? lastMessageRef : null}
                 className={`mb-2 d-flex ${
                   isMe ? "justify-content-end" : "justify-content-start"
@@ -386,8 +124,141 @@ function ChatMessages({ chatId }) {
                       : "18px 18px 18px 4px",
                     backgroundColor: isMe ? "#dcf8c6" : "#ffffff",
                     boxShadow: "0 1px 1px rgba(0,0,0,0.15)",
+                    position: "relative",
                   }}
+                  onMouseEnter={() => setHoveredMessage(m._id)}
+                  onMouseLeave={() => setHoveredMessage(null)}
                 >
+                  {/* DROPDOWN BUTTON */}
+                  {hoveredMessage === m._id && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "4px",
+                        right: "4px",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        color: "#666",
+                      }}
+                      onClick={() => setDropdownOpen(dropdownOpen === m._id ? null : m._id)}
+                    >
+                      ⌄
+                    </div>
+                  )}
+
+                  {/* DROPDOWN MENU */}
+                  {dropdownOpen === m._id && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "20px",
+                        right: "4px",
+                        background: "#fff",
+                        border: "1px solid #ccc",
+                        borderRadius: "4px",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                        zIndex: 1000,
+                        minWidth: "80px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                        }}
+                        onClick={() => {
+                          onReply(m);
+                          setDropdownOpen(null);
+                        }}
+                      >
+                        Reply
+                      </div>
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                        }}
+                        onClick={() => {
+                          setForwardModal(m);
+                          setDropdownOpen(null);
+                        }}
+                      >
+                        Forward
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FORWARDED LABEL */}
+                  {m.isForwarded && (
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "#666",
+                        marginBottom: "2px",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Forwarded
+                    </div>
+                  )}
+
+                  {/* REPLY PREVIEW */}
+                  {m.replyTo && (
+                    <div
+                      style={{
+                        background: "#f0f0f0",
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        marginBottom: "4px",
+                        borderLeft: "3px solid #007bff",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        color: "#666",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                      onClick={() => {
+                        const el = document.getElementById(`msg-${m.replyTo._id}`);
+                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }}
+                    >
+                      {m.replyTo.type === "image" && m.replyTo.mediaUrl && (
+                        <img
+                          src={m.replyTo.mediaUrl}
+                          alt="reply thumbnail"
+                          style={{
+                            width: "40px",
+                            height: "40px",
+                            objectFit: "cover",
+                            borderRadius: "4px",
+                          }}
+                        />
+                      )}
+                      {m.replyTo.type === "video" && m.replyTo.mediaUrl && (
+                        <video
+                          src={m.replyTo.mediaUrl}
+                          style={{
+                            width: "40px",
+                            height: "40px",
+                            objectFit: "cover",
+                            borderRadius: "4px",
+                          }}
+                        />
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <strong>{m.replyTo.sender?.name}:</strong>{" "}
+                        {m.replyTo.type === "text"
+                          ? m.replyTo.text
+                          : m.replyTo.type === "file"
+                          ? `📄 ${m.replyTo.fileName}`
+                          : `Media: ${m.replyTo.type}`}
+                      </div>
+                    </div>
+                  )}
+
                   {/* TEXT */}
                   {m.type === "text" && <div>{m.text}</div>}
 
@@ -395,44 +266,35 @@ function ChatMessages({ chatId }) {
                   {m.type === "image" && m.mediaUrl && (
                     <img
                       src={m.mediaUrl}
-                      alt={m.fileName || "image"}
+                      alt="image"
                       style={mediaStyle}
                       onClick={() => setPreview(m)}
                     />
                   )}
 
-                  {/* VIDEO (WITH REACT-ICON PLAY BUTTON) */}
+                  {/* VIDEO */}
                   {m.type === "video" && m.mediaUrl && (
                     <div
-                      style={{
-                        position: "relative",
-                        display: "inline-block",
-                      }}
+                      style={{ position: "relative", display: "inline-block" }}
                       onClick={() => setPreview(m)}
                     >
-                      <video
-                        src={m.mediaUrl}
-                        style={mediaStyle}
-                      />
-
-                      {/* ▶ PLAY ICON */}
+                      <video src={m.mediaUrl} style={mediaStyle} />
                       <FaPlay
                         style={{
                           position: "absolute",
                           top: "50%",
                           left: "50%",
                           transform: "translate(-50%, -50%)",
-                          fontSize: "42px",
+                          fontSize: 42,
                           color: "rgba(255,255,255,0.9)",
                           pointerEvents: "none",
-                          filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))",
                         }}
                       />
                     </div>
                   )}
 
                   {/* FILE */}
-                  {m.type === "file" && m.mediaUrl && (
+                  {m.type === "file" && (
                     <div
                       style={{ cursor: "pointer", color: "#007bff" }}
                       onClick={() => setPreview(m)}
@@ -446,7 +308,7 @@ function ChatMessages({ chatId }) {
                     style={{
                       fontSize: "11px",
                       textAlign: "right",
-                      marginTop: "4px",
+                      marginTop: 4,
                       color: "#666",
                     }}
                   >
@@ -462,63 +324,56 @@ function ChatMessages({ chatId }) {
         })}
       </div>
 
-      {/* PREVIEW MODAL */}
+      {/* PREVIEW MODAL (FIXED SIZE + CENTERED) */}
       {preview && preview.mediaUrl && (
-        <>
-          <div
-            className="modal-backdrop fade show"
-            onClick={() => setPreview(null)}
-          />
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
+          style={{ background: "rgba(0,0,0,0.85)", zIndex: 2000 }}
+          onClick={() => setPreview(null)}
+        >
+          {preview.type === "image" && (
+            <img
+              src={preview.mediaUrl}
+              alt="preview"
+              style={{
+                maxWidth: "90vw",
+                maxHeight: "85vh",
+                objectFit: "contain",
+              }}
+            />
+          )}
 
-          <div className="modal fade show d-block">
-            <div className="modal-dialog modal-dialog-centered modal-lg">
-              <div className="modal-content bg-dark text-white">
-                <div className="modal-header border-secondary">
-                  <h6 className="modal-title">
-                    {preview.fileName || "Preview"}
-                  </h6>
-                  <button
-                    className="btn-close btn-close-white"
-                    onClick={() => setPreview(null)}
-                  />
-                </div>
+          {preview.type === "video" && (
+            <video
+              src={preview.mediaUrl}
+              controls
+              autoPlay
+              style={{
+                maxWidth: "90vw",
+                maxHeight: "85vh",
+                objectFit: "contain",
+              }}
+            />
+          )}
 
-                <div className="modal-body text-center">
-                  {preview.type === "image" && (
-                    <img
-                      src={preview.mediaUrl}
-                      alt={preview.fileName || "image"}
-                      style={{ maxWidth: "100%" }}
-                    />
-                  )}
+          {preview.type === "file" && (
+            <a
+              href={preview.mediaUrl}
+              download
+              className="btn btn-success"
+            >
+              Download
+            </a>
+          )}
+        </div>
+      )}
 
-                  {preview.type === "video" && (
-                    <video
-                      src={preview.mediaUrl}
-                      controls
-                      autoPlay
-                      style={{ maxWidth: "100%" }}
-                    />
-                  )}
-
-                  {preview.type === "file" && (
-                    <>
-                      <p>{preview.fileName}</p>
-                      <p>{preview.fileSize}</p>
-                      <a
-                        href={preview.mediaUrl}
-                        download
-                        className="btn btn-success"
-                      >
-                        Download
-                      </a>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
+      {/* FORWARD MODAL */}
+      {forwardModal && (
+        <ForwardModal
+          message={forwardModal}
+          onClose={() => setForwardModal(null)}
+        />
       )}
     </>
   );

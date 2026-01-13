@@ -1,4 +1,3 @@
-- [x] Update ChatInfoDrawer.jsx to import useEffect and useGetOrCreateChatMutation
-- [x] Add logic to fetch chat using getOrCreateChat mutation when user changes
-- [x] Update useGetMessagesQuery to use chat?._id instead of user?.chatId
-- [x] Test that Media, links and docs now show data
+- [x] Update ChatWindow.jsx to pass replyTo and onCancelReply props to ChatInput
+- [ ] Test the reply feature to ensure preview appears and reply context is shown in chat bubbles
+

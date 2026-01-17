@@ -8,6 +8,8 @@ const {
   getMessages,
   getOrCreateChat,
   sendMessage,
+  deleteForMe,
+  deleteForEveryone,
 } = require("../controllers/messageController");
 
 const router = express.Router();
@@ -23,5 +25,8 @@ router.post(
   messageUpload.single("file"), // ✅ FIX
   uploadMessage
 );
+
+router.put("/:id/delete-for-me", protect, deleteForMe);
+router.put("/:id/delete-for-everyone", protect, deleteForEveryone);
 
 module.exports = router;

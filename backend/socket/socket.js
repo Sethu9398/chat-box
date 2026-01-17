@@ -10,6 +10,7 @@ const socketServer = (io) => {
     /* USER ONLINE */
     socket.on("user-online", (userId) => {
       onlineUsers.set(userId, socket.id);
+      socket.join(userId); // Join socket to user room for targeted emits
       io.emit("online-users", Array.from(onlineUsers.keys()));
     });
 

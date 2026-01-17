@@ -48,11 +48,33 @@ function Sidebar() {
   /* REAL-TIME SIDEBAR UPDATES */
   useEffect(() => {
     const handler = () => {
+      console.log("🔄 Sidebar update received");
       dispatch(userApi.util.invalidateTags(["User"]));
     };
 
+    const messageUpdateHandler = (data) => {
+      console.log("📩 Sidebar message update received:", data);
+      if (data.scope === "for-me") {
+        // Update the specific user's lastMessage in cache
+        dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+          const chatUser = draft.find(u => u.chatId === data.chatId);
+          if (chatUser) {
+            chatUser.lastMessage = data.lastMessageText;
+          }
+        }));
+      } 
+      else {
+        // For "for-everyone", invalidate to refetch
+        dispatch(userApi.util.invalidateTags(["User"]));
+      }
+    };
+
     socket.on("sidebar-update", handler);
-    return () => socket.off("sidebar-update", handler);
+    socket.on("sidebar-message-update", messageUpdateHandler);
+    return () => {
+      socket.off("sidebar-update", handler);
+      socket.off("sidebar-message-update", messageUpdateHandler);
+    };
   }, [dispatch]);
 
   const toggleTheme = () => {
@@ -73,10 +95,10 @@ function Sidebar() {
   );
 
   const getLastMessage = (msg) => {
-  if (!msg) return "No messages yet";
-  if (typeof msg === "string") return msg;
-  return "Message";
-};
+    if (!msg) return "No messages yet";
+    if (typeof msg === "string") return msg;
+    return "Message";
+  };
 
   return (
     <div className="d-flex flex-column h-100 bg-white">
@@ -172,7 +194,7 @@ function Sidebar() {
             <div className="flex-grow-1">
               <strong>{u.name}</strong>
               <div className="text-muted small text-truncate">
-               {getLastMessage(u.lastMessage)}
+                {getLastMessage(u.lastMessage)}
               </div>
             </div>
 

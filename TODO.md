@@ -1,3 +1,4 @@
-- [x] Update ChatWindow.jsx to pass replyTo and onCancelReply props to ChatInput
-- [ ] Test the reply feature to ensure preview appears and reply context is shown in chat bubbles
-
+- [x] Analyze the deleteForMe function in backend/controllers/messageController.js
+- [x] Add logic to update Chat.lastMessage when the deleted message was the last visible message for the user
+- [x] Ensure the socket event is emitted correctly to refresh sidebar state
+- [ ] Test the changes to verify sidebar updates immediately without page refresh

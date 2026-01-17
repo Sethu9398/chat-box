@@ -19,7 +19,7 @@ export const messageApi = createApi({
       }),
       invalidatesTags: ["Messages"],
     }),
-     uploadMessage: builder.mutation({
+    uploadMessage: builder.mutation({
       query: (formData) => ({
         url: "/messages/upload",
         method: "POST",
@@ -27,8 +27,22 @@ export const messageApi = createApi({
         formData: true,
       }),
       invalidatesTags: ["Messages"],
+    }),
+    deleteForMe: builder.mutation({
+      query: (id) => ({
+        url: `/messages/${id}/delete-for-me`,
+        method: "PUT",
+      }),
+      invalidatesTags: ["Messages"],
+    }),
+    deleteForEveryone: builder.mutation({
+      query: (id) => ({
+        url: `/messages/${id}/delete-for-everyone`,
+        method: "PUT",
+      }),
+      invalidatesTags: ["Messages"],
     })
   }),
 });
 
-export const { useGetMessagesQuery, useSendMessageMutation, useUploadMessageMutation } = messageApi;
+export const { useGetMessagesQuery, useSendMessageMutation, useUploadMessageMutation, useDeleteForMeMutation, useDeleteForEveryoneMutation } = messageApi;

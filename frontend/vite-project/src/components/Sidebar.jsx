@@ -17,14 +17,53 @@ import defaultprofile from "../../../../Asset/userDB.avif";
 /* LAST SEEN FORMATTER */
 const formatLastSeen = (lastSeen) => {
   if (!lastSeen) return "";
-  const diff = Date.now() - new Date(lastSeen);
+  const now = new Date();
+  const lastSeenDate = new Date(lastSeen);
+  const diff = now - lastSeenDate;
   const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
-  if (mins < 1440) return `${Math.floor(mins / 60)}h ago`;
-  return new Date(lastSeen).toLocaleDateString("en-US", {
+  if (hours < 24) return `${hours}h ago`;
+
+  // For same day, show time
+  if (days === 0) {
+    return lastSeenDate.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
+
+  // For yesterday, show "Yesterday"
+  if (days === 1) {
+    return `Yesterday ${lastSeenDate.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })}`;
+  }
+
+  // For older dates, show date and time
+  if (days < 7) {
+    return lastSeenDate.toLocaleDateString("en-US", {
+      weekday: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
+
+  // For very old dates, show full date and time
+  return lastSeenDate.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
+    year: lastSeenDate.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   });
 };
 
@@ -33,6 +72,7 @@ function Sidebar() {
   const [search, setSearch] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [theme, setTheme] = useState("light");
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -43,7 +83,17 @@ function Sidebar() {
     data: users = [],
     isLoading,
     isError,
+    refetch,
   } = useGetSidebarUsersQuery();
+
+  // Update current time every 60 seconds for lastSeen display
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   /* REAL-TIME SIDEBAR UPDATES */
   useEffect(() => {
@@ -55,25 +105,77 @@ function Sidebar() {
     const messageUpdateHandler = (data) => {
       console.log("📩 Sidebar message update received:", data);
       if (data.scope === "for-me") {
-        // Update the specific user's lastMessage in cache
+        // Update the specific user's lastMessage in cache and reorder
         dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
           const chatUser = draft.find(u => u.chatId === data.chatId);
           if (chatUser) {
             chatUser.lastMessage = data.lastMessageText;
+            chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString(); // Use provided or set to now
           }
+          // Sort by lastMessageCreatedAt descending
+          draft.sort((a, b) => {
+            const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+            const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+            return bTime - aTime;
+          });
         }));
-      } 
+      }
+      else if (data.scope === "read-update") {
+        // Invalidate to refetch sidebar data to ensure unread count is updated
+        dispatch(userApi.util.invalidateTags(["User"]));
+      }
+      else if (data.scope === "for-everyone") {
+        // Directly update unreadCount in cache for real-time update
+        dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+          const chatUser = draft.find(u => u.chatId === data.chatId);
+          if (chatUser) {
+            chatUser.unreadCount = data.unreadCount || 0;
+            chatUser.lastMessage = data.lastMessageText;
+            chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
+          }
+          // Sort by lastMessageCreatedAt descending
+          draft.sort((a, b) => {
+            const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+            const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+            return bTime - aTime;
+          });
+        }));
+      }
       else {
-        // For "for-everyone", invalidate to refetch
+        // Fallback: invalidate to refetch
         dispatch(userApi.util.invalidateTags(["User"]));
       }
     };
 
+    const onlineUsersHandler = (onlineUserIds) => {
+      console.log("🟢 Online users update:", onlineUserIds);
+      // Invalidate to refetch sidebar data to ensure lastSeen is updated from DB
+      dispatch(userApi.util.invalidateTags(["User"]));
+    };
+
+    const userStatusUpdateHandler = (data) => {
+      console.log("👤 User status update:", data);
+      // Update cache directly for instant UI updates
+      dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+        const user = draft.find(u => u._id === data.userId);
+        if (user) {
+          user.isOnline = data.isOnline;
+          if (!data.isOnline && data.lastSeen) {
+            user.lastSeen = data.lastSeen;
+          }
+        }
+      }));
+    };
+
     socket.on("sidebar-update", handler);
     socket.on("sidebar-message-update", messageUpdateHandler);
+    socket.on("online-users", onlineUsersHandler);
+    socket.on("user-status-update", userStatusUpdateHandler);
     return () => {
       socket.off("sidebar-update", handler);
       socket.off("sidebar-message-update", messageUpdateHandler);
+      socket.off("online-users", onlineUsersHandler);
+      socket.off("user-status-update", userStatusUpdateHandler);
     };
   }, [dispatch]);
 

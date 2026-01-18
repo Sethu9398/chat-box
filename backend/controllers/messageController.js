@@ -64,6 +64,25 @@ const getMessages = async (req, res) => {
     .populate("replyTo")
     .sort({ createdAt: 1 });
 
+  // Mark messages as read (messages not sent by current user)
+  await Message.updateMany(
+    {
+      chatId,
+      sender: { $ne: req.user._id },
+      status: { $ne: "read" },
+      deletedBy: { $ne: req.user._id },
+      deletedForAll: false
+    },
+    { status: "read" }
+  );
+
+  // Emit sidebar update to mark unread count as 0 for this chat
+  req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
+    chatId: chatId.toString(),
+    unreadCount: 0,
+    scope: "read-update"
+  });
+
   res.json(messages);
 };
 
@@ -100,7 +119,45 @@ const sendMessage = async (req, res) => {
 
     // 🔥 IMPORTANT: SEND TO SOCKET CLIENTS
     req.app.get("io").to(chatId.toString()).emit("new-message", populated);
-    req.app.get("io").emit("sidebar-update");
+
+    // Update sidebar for all participants except sender (who will get direct update)
+    const chat = await Chat.findById(chatId).populate("participants");
+    const io = req.app.get("io");
+    const onlineUsers = req.app.get("onlineUsers");
+    for (const participant of chat.participants) {
+      if (participant._id.toString() !== req.user._id.toString()) {
+        // Check if participant is currently viewing the chat
+        const socketId = onlineUsers.get(participant._id.toString());
+        const isViewingChat = socketId && io.sockets.adapter.rooms.get(chatId.toString())?.has(socketId);
+        let unreadCount = 0;
+        if (!isViewingChat) {
+          // Calculate unread count for this participant
+          unreadCount = await Message.countDocuments({
+            chatId,
+            sender: { $ne: participant._id },
+            status: { $ne: "read" },
+            deletedBy: { $ne: participant._id },
+            deletedForAll: false
+          });
+        }
+
+        req.app.get("io").to(participant._id.toString()).emit("sidebar-message-update", {
+          chatId: chatId.toString(),
+          lastMessageText: populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message"),
+          lastMessageCreatedAt: populated.createdAt.toISOString(),
+          unreadCount,
+          scope: "for-everyone"
+        });
+      }
+    }
+
+    // Update sidebar for sender
+    req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
+      chatId: chatId.toString(),
+      lastMessageText: populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message"),
+      lastMessageCreatedAt: populated.createdAt.toISOString(),
+      scope: "for-me"
+    });
 
     res.status(201).json(populated);
   } catch (err) {
@@ -122,16 +179,18 @@ const uploadMessage = async (req, res) => {
       });
     }
 
+    const file = req.file;
+
     // ✅ CORRECT CLOUDINARY URL
-    const mediaUrl = req.file.path;
+    const mediaUrl = file.path;
 
     const message = await Message.create({
       chatId,
       sender: req.user._id,
       type,
       mediaUrl,
-      fileName: req.file.originalname,
-      fileSize: `${(req.file.size / 1024 / 1024).toFixed(2)} MB`,
+      fileName: file.originalname,
+      fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
       replyTo: replyTo || null,
       isForwarded: isForwarded || false,
     });
@@ -145,15 +204,57 @@ const uploadMessage = async (req, res) => {
       { path: "replyTo" }
     ]);
 
+    // Convert chatId to string for socket emission
+    populated.chatId = populated.chatId.toString();
+
     // 🔥 REALTIME UPDATES
     req.app.get("io").to(chatId.toString()).emit("new-message", populated);
-    req.app.get("io").emit("sidebar-update");
+
+    // Update sidebar for all participants except sender (who will get direct update)
+    const chat = await Chat.findById(chatId).populate("participants");
+    const io = req.app.get("io");
+    const onlineUsers = req.app.get("onlineUsers");
+    for (const participant of chat.participants) {
+      if (participant._id.toString() !== req.user._id.toString()) {
+        // Check if participant is currently viewing the chat
+        const socketId = onlineUsers.get(participant._id.toString());
+        const isViewingChat = socketId && io.sockets.adapter.rooms.get(chatId.toString())?.has(socketId);
+        let unreadCount = 0;
+        if (!isViewingChat) {
+          // Calculate unread count for this participant
+          unreadCount = await Message.countDocuments({
+            chatId,
+            sender: { $ne: participant._id },
+            status: { $ne: "read" },
+            deletedBy: { $ne: participant._id },
+            deletedForAll: false
+          });
+        }
+
+        req.app.get("io").to(participant._id.toString()).emit("sidebar-message-update", {
+          chatId: chatId.toString(),
+          lastMessageText: populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message"),
+          lastMessageCreatedAt: populated.createdAt.toISOString(),
+          unreadCount,
+          scope: "for-everyone"
+        });
+      }
+    }
+
+    // Update sidebar for sender
+    req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
+      chatId: chatId.toString(),
+      lastMessageText: populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message"),
+          lastMessageCreatedAt: populated.createdAt.toISOString(),
+          scope: "for-me"
+    });
 
     res.status(201).json(populated);
   } catch (err) {
     console.error("❌ UPLOAD MESSAGE ERROR:", err);
     res.status(500).json({
-      message: "File upload to Cloudinary failed",
+      message: "File upload failed",
+      error: err.message,
     });
   }
 };
@@ -199,6 +300,7 @@ const deleteForMe = async (req, res) => {
       req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
         chatId: message.chatId.toString(),
         lastMessageText,
+        lastMessageCreatedAt: newLastVisibleMessage ? newLastVisibleMessage.createdAt.toISOString() : null,
         scope: "for-me"
       });
     }
@@ -249,6 +351,7 @@ const deleteForEveryone = async (req, res) => {
       req.app.get("io").to(participant._id.toString()).emit("sidebar-message-update", {
         chatId: message.chatId.toString(),
         lastMessageText,
+        lastMessageCreatedAt: lastVisibleMessage ? lastVisibleMessage.createdAt.toISOString() : null,
         scope: "for-everyone"
       });
     }
@@ -256,7 +359,7 @@ const deleteForEveryone = async (req, res) => {
     // Emit to chat room for message deletion
     req.app.get("io").to(message.chatId.toString()).emit("message-deleted", { messageId: req.params.id });
 
-    res.json({ success: true });
+    res.json({ success: true })
   } catch (err) {
     console.error("❌ DELETE FOR EVERYONE ERROR:", err);
     res.status(500).json({ message: "Failed to delete message for everyone" });

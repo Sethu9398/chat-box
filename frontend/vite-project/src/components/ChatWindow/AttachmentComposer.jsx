@@ -41,6 +41,11 @@ function AttachmentComposer({ chatId, replyTo, onClose }) {
 
     try {
       await uploadMessage(formData).unwrap();
+      // Clear inputs after successful send
+      setFile(null);
+      setPreview(null);
+      if (preview) URL.revokeObjectURL(preview);
+      fileInputRef.current.value = '';
       onClose(); // ✅ close modal safely
     } catch (error) {
       console.error("Upload failed:", error);
@@ -131,7 +136,7 @@ function AttachmentComposer({ chatId, replyTo, onClose }) {
           ref={fileInputRef}
           type="file"
           className="d-none"
-          accept="image/*,video/*,.pdf,.doc,.docx,.zip"
+          accept="*/*"
           onChange={handleFileSelect}
         />
       </div>

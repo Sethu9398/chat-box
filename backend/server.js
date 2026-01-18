@@ -23,6 +23,8 @@ const io = new Server(server, {
   },
 });
 
+const onlineUsers = new Map();
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({ origin: "http://localhost:5173", credentials: true }));
@@ -36,10 +38,9 @@ app.get("/", (req, res) => {
 })
 
 app.set("io", io);
+app.set("onlineUsers", onlineUsers);
 
-
-socketServer(io);
-
+socketServer(io, onlineUsers);
 
 server.listen(process.env.PORT || 5000, () =>
   console.log("🚀 Server + Socket running on port", process.env.PORT || 5000)

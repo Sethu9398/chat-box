@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import DEFAULT_AVATAR from "../../../../../Asset/userDB.avif";
 
 /* ⏱ FORMAT LAST SEEN */
@@ -19,6 +20,8 @@ const formatLastSeen = (lastSeen) => {
 };
 
 function ChatHeader({ user, onOpenInfo }) {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
   const avatar =
     typeof user?.avatar === "string" && user.avatar.trim()
       ? user.avatar
@@ -26,6 +29,15 @@ function ChatHeader({ user, onOpenInfo }) {
 
   const isOnline = user?.isOnline === true;
   const lastSeen = user?.lastSeen ?? null;
+
+  // Update current time every 60 seconds for lastSeen display
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <div className="d-flex align-items-center p-3 bg-light border-bottom justify-content-between">

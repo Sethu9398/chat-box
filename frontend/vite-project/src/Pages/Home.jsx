@@ -21,6 +21,22 @@ function Home() {
     }
   }, [currentUser?._id]);
 
+  // Listen for user status updates to update selectedUser in real-time
+  useEffect(() => {
+    const handleUserStatusUpdate = (data) => {
+      if (selectedUser && selectedUser._id === data.userId) {
+        dispatch(setSelectedUser({
+          ...selectedUser,
+          isOnline: data.isOnline,
+          lastSeen: data.lastSeen
+        }));
+      }
+    };
+
+    socket.on("user-status-update", handleUserStatusUpdate);
+    return () => socket.off("user-status-update", handleUserStatusUpdate);
+  }, [selectedUser, dispatch]);
+
   useEffect(() => {
     if (selectedUser && !selectedUser.chatId) {
       getOrCreateChat(selectedUser._id).unwrap().then((chat) => {

@@ -22,7 +22,7 @@ router.post("/", protect, sendMessage);
 router.post(
   "/upload",
   protect,
-  messageUpload.single("file"), // ✅ FIX
+  messageUpload,
   uploadMessage
 );
 

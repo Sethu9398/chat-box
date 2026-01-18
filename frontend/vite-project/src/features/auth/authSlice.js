@@ -23,9 +23,14 @@ const authSlice = createSlice({
       socket.emit("user-online", action.payload._id);
     },
     logoutUser: (state) => {
+      const userId = state.user?._id;
       state.user = null;
       state.isAuthenticated = false;
       localStorage.removeItem("user");
+      // Emit user-offline to mark user offline immediately
+      if (userId) {
+        socket.emit("user-offline", userId);
+      }
     },
   },
 });

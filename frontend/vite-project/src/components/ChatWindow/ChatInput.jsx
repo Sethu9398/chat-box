@@ -3,6 +3,7 @@ import { useSelector } from "react-redux";
 import { FaSmile, FaPaperclip } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 import { useSendMessageMutation } from "../../features/messages/messageApi";
+import socket from "../../socketClient";
 
 function ChatInput({ chatId, onOpenAttachment, replyTo, onCancelReply }) {
   const [msg, setMsg] = useState("");
@@ -15,18 +16,19 @@ function ChatInput({ chatId, onOpenAttachment, replyTo, onCancelReply }) {
   const sendMessage = async () => {
     if (!msg.trim() || !chatId) return;
 
-    try {
-      await sendMessageMutation({
-        chatId,
-        text: msg.trim(),
-        replyTo: replyTo?._id,
-        isForwarded: false,
-      }).unwrap();
-      setMsg("");
-      onCancelReply?.();
-    } catch (error) {
-      console.error("Failed to send message:", error);
-    }
+    const messageText = msg.trim();
+    setMsg(""); // Clear input immediately like WhatsApp
+    onCancelReply?.();
+
+    // Use socket to send message for real-time updates
+    socket.emit("send-message", {
+      chatId,
+      sender: me._id,
+      text: messageText,
+      type: "text",
+      replyTo: replyTo?._id,
+      isForwarded: false,
+    });
   };
 
   return (

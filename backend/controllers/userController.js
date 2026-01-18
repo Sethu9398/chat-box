@@ -68,20 +68,52 @@ const getSidebarUsers = async (req, res) => {
         }
       }
 
+      let lastMessageCreatedAt = null;
+
+      if (chat) {
+        // Find the most recent message in the chat (regardless of deletion)
+        const mostRecentMessage = await Message.findOne({
+          chatId: chat._id
+        }).sort({ createdAt: -1 });
+
+        if (mostRecentMessage) {
+          lastMessageCreatedAt = mostRecentMessage.createdAt;
+        }
+      }
+
+      // Calculate unread messages count
+      let unreadCount = 0;
+      if (chat) {
+        unreadCount = await Message.countDocuments({
+          chatId: chat._id,
+          sender: { $ne: myId }, // Not sent by current user
+          deletedForAll: false, // Not deleted for everyone
+          deletedBy: { $ne: myId }, // Not deleted by current user
+          status: { $ne: "read" } // Not read yet
+        });
+      }
+
       return {
         _id: user._id,
         name: user.name,
         avatar: user.avatar,
         isOnline: user.isOnline,
-        lastSeen: user.lastSeen,
+        lastSeen: user.lastSeen ? user.lastSeen.toISOString() : null,
 
         chatId: chat?._id || null,
         lastMessage: lastMessageText,
+        lastMessageCreatedAt: lastMessageCreatedAt ? lastMessageCreatedAt.toISOString() : null,
 
-        // ✅ TEMP unread logic (0 for now)
-        unreadCount: 0,
+        unreadCount: unreadCount,
       };
     }));
+
+    // Sort by lastMessageCreatedAt descending (most recent first)
+    sidebarUsers.sort((a, b) => {
+      const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+      const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+      return bTime - aTime;
+    });
 
     res.status(200).json(sidebarUsers);
   } catch (err) {

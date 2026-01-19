@@ -122,8 +122,13 @@ function Sidebar() {
         }));
       }
       else if (data.scope === "read-update") {
-         // Invalidate to refetch sidebar data to ensure unread count is updated
--        dispatch(userApi.util.invalidateTags(["User"]));
+        // Update unread count to 0 for this chat
+        dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+          const chatUser = draft.find(u => u.chatId === data.chatId);
+          if (chatUser) {
+            chatUser.unreadCount = 0;
+          }
+        }));
       }
       else if (data.scope === "for-everyone") {
         // Directly update unreadCount in cache for real-time update
@@ -168,17 +173,24 @@ function Sidebar() {
       }));
     };
 
+    const connectHandler = () => {
+      console.log("🔌 Socket connected, refetching sidebar");
+      refetch();
+    };
+
     socket.on("sidebar-update", handler);
     socket.on("sidebar-message-update", messageUpdateHandler);
     socket.on("online-users", onlineUsersHandler);
     socket.on("user-status-update", userStatusUpdateHandler);
+    socket.on("connect", connectHandler);
     return () => {
       socket.off("sidebar-update", handler);
       socket.off("sidebar-message-update", messageUpdateHandler);
       socket.off("online-users", onlineUsersHandler);
       socket.off("user-status-update", userStatusUpdateHandler);
+      socket.off("connect", connectHandler);
     };
-  }, [dispatch]);
+  }, [dispatch, refetch]);
 
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";

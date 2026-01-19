@@ -385,10 +385,61 @@ const markAsRead = async (req, res) => {
       { status: "read" }
     );
 
+    // Emit status updates to senders
+    const updatedMessages = await Message.find({
+      chatId,
+      sender: { $ne: req.user._id },
+      status: "read",
+      deletedBy: { $ne: req.user._id },
+      deletedForAll: false
+    }).select("_id sender");
+
+    for (const msg of updatedMessages) {
+      req.app.get("io").to(msg.sender.toString()).emit("status-update", {
+        messageId: msg._id.toString(),
+        status: "read"
+      });
+    }
+
+    // Emit sidebar update to mark unread count as 0 for this chat
+    req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
+      chatId: chatId.toString(),
+      unreadCount: 0,
+      scope: "read-update"
+    });
+
     res.json({ success: true });
   } catch (err) {
     console.error("❌ MARK AS READ ERROR:", err);
     res.status(500).json({ message: "Failed to mark messages as read" });
+  }
+};
+
+/* =========================
+   MARK AS DELIVERED
+========================= */
+const markAsDelivered = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const message = await Message.findById(id);
+    if (!message) return res.status(404).json({ message: "Message not found" });
+
+    // Only update if status is "sent"
+    if (message.status === "sent") {
+      await Message.findByIdAndUpdate(id, { status: "delivered" });
+
+      // Emit status update to sender
+      req.app.get("io").to(message.sender.toString()).emit("status-update", {
+        messageId: id,
+        status: "delivered"
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ MARK AS DELIVERED ERROR:", err);
+    res.status(500).json({ message: "Failed to mark message as delivered" });
   }
 };
 
@@ -400,4 +451,5 @@ module.exports = {
   deleteForMe,
   deleteForEveryone,
   markAsRead,
+  markAsDelivered,
 };

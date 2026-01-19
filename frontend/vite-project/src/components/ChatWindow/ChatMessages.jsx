@@ -9,7 +9,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { createSelector } from "@reduxjs/toolkit";
 import { FaPlay } from "react-icons/fa";
 import socket from "../../socketClient";
-import { useGetMessagesQuery, useDeleteForMeMutation, useDeleteForEveryoneMutation, messageApi } from "../../features/messages/messageApi";
+import { useGetMessagesQuery, useDeleteForMeMutation, useDeleteForEveryoneMutation, useMarkAsDeliveredMutation, useMarkAsReadMutation, messageApi } from "../../features/messages/messageApi";
 import ForwardModal from "./ForwardModal";
 
 // Memoized selector for typing users
@@ -29,6 +29,8 @@ function ChatMessages({ chatId, onReply }) {
   const typingUsers = useSelector((state) => selectTypingUsers(state, chatId));
   const [deleteForMeMutation] = useDeleteForMeMutation();
   const [deleteForEveryoneMutation] = useDeleteForEveryoneMutation();
+  const [markAsDelivered] = useMarkAsDeliveredMutation();
+  const [markAsRead] = useMarkAsReadMutation();
   const [socketMessages, setSocketMessages] = useState([]);
   const [preview, setPreview] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
@@ -48,6 +50,12 @@ function ChatMessages({ chatId, onReply }) {
     const handler = (msg) => {
       if (msg?.chatId?.toString() === chatId) {
         setSocketMessages((prev) => [...prev, msg]);
+        // Mark as delivered if not sent by me
+        if (msg.sender?._id !== me?._id) {
+          markAsDelivered(msg._id);
+          // Mark as read since the chat is open
+          markAsRead(chatId);
+        }
       }
     };
 
@@ -62,11 +70,27 @@ function ChatMessages({ chatId, onReply }) {
       }
     };
 
+    const statusUpdateHandler = (data) => {
+      console.log("📩 Status update received:", data);
+      if (data.messageId && data.status) {
+        // Update status in socketMessages
+        setSocketMessages((prev) =>
+          prev.map((msg) =>
+            msg._id === data.messageId ? { ...msg, status: data.status } : msg
+          )
+        );
+        // Invalidate cache to update from server
+        dispatch(messageApi.util.invalidateTags(["Messages"]));
+      }
+    };
+
     socket.on("new-message", handler);
     socket.on("message-deleted", deletedHandler);
+    socket.on("status-update", statusUpdateHandler);
     return () => {
       socket.off("new-message", handler);
       socket.off("message-deleted", deletedHandler);
+      socket.off("status-update", statusUpdateHandler);
     };
   }, [chatId, dispatch]);
 
@@ -398,12 +422,23 @@ function ChatMessages({ chatId, onReply }) {
                       textAlign: "right",
                       marginTop: 4,
                       color: "#666",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-end",
+                      gap: "4px",
                     }}
                   >
                     {new Date(m.createdAt).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
+                    {isMe && (
+<span style={{ fontSize: "9px", color: m.status === "read" ? "#007bff" : m.status === "delivered" ? "#999" : "#666" }}>
+                        {m.status === "sent" && "✓"}
+                        {m.status === "delivered" && "✓✓"}
+                        {m.status === "read" && "✓✓"}
+                      </span>
+                    )}
                   </div>
                     </>
                   )}

@@ -13,6 +13,7 @@ function ChatWindow({ user }) {
   const [showInfo, setShowInfo] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
+  const [previousChatId, setPreviousChatId] = useState(null);
 
   const dispatch = useDispatch();
   const [markAsRead] = useMarkAsReadMutation();
@@ -20,11 +21,17 @@ function ChatWindow({ user }) {
   // ✅ JOIN SOCKET ROOM AND MARK MESSAGES AS READ
   useEffect(() => {
     if (user?.chatId) {
+      // Leave previous chat room if switching
+      if (previousChatId && previousChatId !== user.chatId) {
+        socket.emit("leave-chat", previousChatId);
+      }
+
       socket.emit("join-chat", user.chatId);
       // Mark all messages in this chat as read
       markAsRead(user.chatId);
+      setPreviousChatId(user.chatId);
     }
-  }, [user?.chatId, markAsRead]);
+  }, [user?.chatId, markAsRead, previousChatId]);
 
   // ✅ REJOIN ON RECONNECT
   useEffect(() => {

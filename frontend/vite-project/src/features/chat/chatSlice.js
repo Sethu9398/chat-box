@@ -4,6 +4,7 @@ const chatSlice = createSlice({
   name: "chat",
   initialState: {
     selectedUser: null,
+    typingUsers: {}, // { chatId: [userId1, userId2, ...] }
   },
   reducers: {
     setSelectedUser: (state, action) => {
@@ -12,10 +13,32 @@ const chatSlice = createSlice({
     clearSelectedUser: (state) => {
       state.selectedUser = null;
     },
+    setTypingUsers: (state, action) => {
+      const { chatId, users } = action.payload;
+      state.typingUsers[chatId] = users;
+    },
+    addTypingUser: (state, action) => {
+      const { chatId, userId } = action.payload;
+      if (!state.typingUsers[chatId]) {
+        state.typingUsers[chatId] = [];
+      }
+      if (!state.typingUsers[chatId].includes(userId)) {
+        state.typingUsers[chatId].push(userId);
+      }
+    },
+    removeTypingUser: (state, action) => {
+      const { chatId, userId } = action.payload;
+      if (state.typingUsers[chatId]) {
+        state.typingUsers[chatId] = state.typingUsers[chatId].filter(id => id !== userId);
+        if (state.typingUsers[chatId].length === 0) {
+          delete state.typingUsers[chatId];
+        }
+      }
+    },
   },
 });
 
-export const { setSelectedUser, clearSelectedUser } = chatSlice.actions;
+export const { setSelectedUser, clearSelectedUser, addTypingUser, removeTypingUser } = chatSlice.actions;
 export default chatSlice.reducer;
 
 

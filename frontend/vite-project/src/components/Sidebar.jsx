@@ -78,6 +78,7 @@ function Sidebar() {
   const navigate = useNavigate();
 
   const currentUser = useSelector((state) => state.auth.user);
+  const selectedUser = useSelector((state) => state.chat.selectedUser);
 
   const {
     data: users = [],
@@ -121,8 +122,8 @@ function Sidebar() {
         }));
       }
       else if (data.scope === "read-update") {
-        // Invalidate to refetch sidebar data to ensure unread count is updated
-        dispatch(userApi.util.invalidateTags(["User"]));
+         // Invalidate to refetch sidebar data to ensure unread count is updated
+-        dispatch(userApi.util.invalidateTags(["User"]));
       }
       else if (data.scope === "for-everyone") {
         // Directly update unreadCount in cache for real-time update
@@ -284,7 +285,7 @@ function Sidebar() {
             className="d-flex align-items-center p-2 border-bottom"
             style={{ cursor: "pointer" }}
             onClick={() => dispatch(setSelectedUser(u))}
-          >
+                    >
             <img
               src={u.avatar || defaultprofile}
               width="45"
@@ -310,7 +311,7 @@ function Sidebar() {
                 {u.isOnline ? "Online" : formatLastSeen(u.lastSeen)}
               </div>
 
-              {Number(u.unreadCount) > 0 && (
+              {Number(u.unreadCount) > 0 && selectedUser?._id !== u._id && (
                 <span className="badge bg-success rounded-circle mt-1">
                   {u.unreadCount}
                 </span>

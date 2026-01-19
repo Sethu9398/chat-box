@@ -366,6 +366,32 @@ const deleteForEveryone = async (req, res) => {
   }
 };
 
+/* =========================
+   MARK AS READ
+========================= */
+const markAsRead = async (req, res) => {
+  try {
+    const { id: chatId } = req.params;
+
+    // Mark all unread messages in the chat as read (messages not sent by current user)
+    await Message.updateMany(
+      {
+        chatId,
+        sender: { $ne: req.user._id },
+        status: { $ne: "read" },
+        deletedBy: { $ne: req.user._id },
+        deletedForAll: false
+      },
+      { status: "read" }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ MARK AS READ ERROR:", err);
+    res.status(500).json({ message: "Failed to mark messages as read" });
+  }
+};
+
 module.exports = {
   getOrCreateChat,
   getMessages,
@@ -373,4 +399,5 @@ module.exports = {
   uploadMessage,
   deleteForMe,
   deleteForEveryone,
+  markAsRead,
 };

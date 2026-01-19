@@ -45,6 +45,17 @@ const socketServer = (io, onlineUsers) => {
       socket.join(chatId);
     });
 
+    /* TYPING INDICATOR */
+    socket.on("start-typing", (data) => {
+      const { chatId, userId } = data;
+      socket.to(chatId).emit("user-typing", { chatId, userId });
+    });
+
+    socket.on("stop-typing", (data) => {
+      const { chatId, userId } = data;
+      socket.to(chatId).emit("user-stop-typing", { chatId, userId });
+    });
+
     /* TEXT MESSAGE ONLY */
     socket.on("send-message", async (data) => {
       try {

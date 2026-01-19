@@ -41,8 +41,15 @@ export const messageApi = createApi({
         method: "PUT",
       }),
       invalidatesTags: ["Messages"],
+    }),
+    markAsRead: builder.mutation({
+      query: (chatId) => ({
+        url: `/messages/${chatId}/read`,
+        method: "PUT",
+      }),
+      invalidatesTags: ["Messages"],
     })
   }),
 });
 
-export const { useGetMessagesQuery, useSendMessageMutation, useUploadMessageMutation, useDeleteForMeMutation, useDeleteForEveryoneMutation } = messageApi;
+export const { useGetMessagesQuery, useSendMessageMutation, useUploadMessageMutation, useDeleteForMeMutation, useDeleteForEveryoneMutation, useMarkAsReadMutation } = messageApi;

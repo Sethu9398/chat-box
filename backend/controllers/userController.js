@@ -1,6 +1,7 @@
 // backend/controllers/userController.js
 const User = require("../models/User");
 const Chat = require("../models/Chat");
+const Message = require("../models/Message");
 const cloudinary = require("../config/cloudinary");
 
 /**
@@ -22,7 +23,7 @@ const getSidebarUsers = async (req, res) => {
         select: "text type fileName",
       });
 
-    const sidebarUsers = users.map((user) => {
+    const sidebarUsers = await Promise.all(users.map(async (user) => {
       const chat = chats.find((c) =>
         c.participants.some(
           (id) => id.toString() === user._id.toString()
@@ -31,13 +32,65 @@ const getSidebarUsers = async (req, res) => {
 
       let lastMessageText = "No messages yet";
 
-      if (chat?.lastMessage) {
-        const m = chat.lastMessage;
+      if (chat) {
+        // Find the most recent message in the chat (regardless of deletion)
+        const mostRecentMessage = await Message.findOne({
+          chatId: chat._id
+        }).sort({ createdAt: -1 });
 
-        if (m.type === "text") lastMessageText = m.text;
-        else if (m.type === "image") lastMessageText = "📷 Photo";
-        else if (m.type === "video") lastMessageText = "🎥 Video";
-        else if (m.type === "file") lastMessageText = "📎 File";
+        if (mostRecentMessage) {
+          if (mostRecentMessage.deletedForAll) {
+            lastMessageText = "This message was deleted";
+          } else {
+            // Check if this message is visible to the user
+            const isVisible = !mostRecentMessage.deletedBy.includes(myId);
+            if (isVisible) {
+              if (mostRecentMessage.type === "text") lastMessageText = mostRecentMessage.text;
+              else if (mostRecentMessage.type === "image") lastMessageText = "📷 Photo";
+              else if (mostRecentMessage.type === "video") lastMessageText = "🎥 Video";
+              else if (mostRecentMessage.type === "file") lastMessageText = "📎 File";
+            } else {
+              // If the most recent is not visible, find the last visible one
+              const lastVisibleMessage = await Message.findOne({
+                chatId: chat._id,
+                deletedForAll: false,
+                deletedBy: { $ne: myId }
+              }).sort({ createdAt: -1 });
+
+              if (lastVisibleMessage) {
+                if (lastVisibleMessage.type === "text") lastMessageText = lastVisibleMessage.text;
+                else if (lastVisibleMessage.type === "image") lastMessageText = "📷 Photo";
+                else if (lastVisibleMessage.type === "video") lastMessageText = "🎥 Video";
+                else if (lastVisibleMessage.type === "file") lastMessageText = "📎 File";
+              }
+            }
+          }
+        }
+      }
+
+      let lastMessageCreatedAt = null;
+
+      if (chat) {
+        // Find the most recent message in the chat (regardless of deletion)
+        const mostRecentMessage = await Message.findOne({
+          chatId: chat._id
+        }).sort({ createdAt: -1 });
+
+        if (mostRecentMessage) {
+          lastMessageCreatedAt = mostRecentMessage.createdAt;
+        }
+      }
+
+      // Calculate unread messages count
+      let unreadCount = 0;
+      if (chat) {
+        unreadCount = await Message.countDocuments({
+          chatId: chat._id,
+          sender: { $ne: myId }, // Not sent by current user
+          deletedForAll: false, // Not deleted for everyone
+          deletedBy: { $ne: myId }, // Not deleted by current user
+          status: { $ne: "read" } // Not read yet
+        });
       }
 
       return {
@@ -45,14 +98,21 @@ const getSidebarUsers = async (req, res) => {
         name: user.name,
         avatar: user.avatar,
         isOnline: user.isOnline,
-        lastSeen: user.lastSeen,
+        lastSeen: user.lastSeen ? user.lastSeen.toISOString() : null,
 
         chatId: chat?._id || null,
         lastMessage: lastMessageText,
+        lastMessageCreatedAt: lastMessageCreatedAt ? lastMessageCreatedAt.toISOString() : null,
 
-        // ✅ TEMP unread logic (0 for now)
-        unreadCount: 0,
+        unreadCount: unreadCount,
       };
+    }));
+
+    // Sort by lastMessageCreatedAt descending (most recent first)
+    sidebarUsers.sort((a, b) => {
+      const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+      const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+      return bTime - aTime;
     });
 
     res.status(200).json(sidebarUsers);

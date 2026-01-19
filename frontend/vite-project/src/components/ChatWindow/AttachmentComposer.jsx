@@ -1,11 +1,14 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useSelector } from "react-redux";
 import { useUploadMessageMutation } from "../../features/messages/messageApi";
+import socket from "../../socketClient";
 
 function AttachmentComposer({ chatId, replyTo, onClose }) {
   const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
 
+  const me = useSelector((state) => state.auth.user);
   const [uploadMessage, { isLoading }] = useUploadMessageMutation();
 
   const handleFileSelect = (e) => {
@@ -22,6 +25,9 @@ function AttachmentComposer({ chatId, replyTo, onClose }) {
     } else {
       setPreview(null);
     }
+
+    // Emit start-typing when selecting file
+    socket.emit("start-typing", { chatId, userId: me._id });
   };
 
   const sendFile = async () => {
@@ -41,6 +47,13 @@ function AttachmentComposer({ chatId, replyTo, onClose }) {
 
     try {
       await uploadMessage(formData).unwrap();
+      // Stop typing when sending file
+      socket.emit("stop-typing", { chatId, userId: me._id });
+      // Clear inputs after successful send
+      setFile(null);
+      setPreview(null);
+      if (preview) URL.revokeObjectURL(preview);
+      fileInputRef.current.value = '';
       onClose(); // ✅ close modal safely
     } catch (error) {
       console.error("Upload failed:", error);
@@ -53,7 +66,10 @@ function AttachmentComposer({ chatId, replyTo, onClose }) {
       {/* BACKDROP */}
       <div
         className="modal-backdrop fade show"
-        onClick={onClose}
+        onClick={() => {
+          socket.emit("stop-typing", { chatId, userId: me._id });
+          onClose();
+        }}
       />
 
       {/* MODAL */}
@@ -131,7 +147,7 @@ function AttachmentComposer({ chatId, replyTo, onClose }) {
           ref={fileInputRef}
           type="file"
           className="d-none"
-          accept="image/*,video/*,.pdf,.doc,.docx,.zip"
+          accept="*/*"
           onChange={handleFileSelect}
         />
       </div>

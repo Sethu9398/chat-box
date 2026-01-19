@@ -1,32 +1,61 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { FaSmile, FaPaperclip } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 import { useSendMessageMutation } from "../../features/messages/messageApi";
+import socket from "../../socketClient";
 
 function ChatInput({ chatId, onOpenAttachment, replyTo, onCancelReply }) {
   const [msg, setMsg] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const inputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   const me = useSelector((state) => state.auth.user);
   const [sendMessageMutation] = useSendMessageMutation();
 
+  const emitStopTyping = () => {
+    socket.emit("stop-typing", { chatId, userId: me._id });
+  };
+
+  const handleInputChange = (e) => {
+    setMsg(e.target.value);
+    // Emit start typing
+    socket.emit("start-typing", { chatId, userId: me._id });
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    // Set new timeout to stop typing after 2 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(emitStopTyping, 2000);
+  };
+
+  const handleInputBlur = () => {
+    setShowEmoji(false);
+  };
+
   const sendMessage = async () => {
     if (!msg.trim() || !chatId) return;
 
-    try {
-      await sendMessageMutation({
-        chatId,
-        text: msg.trim(),
-        replyTo: replyTo?._id,
-        isForwarded: false,
-      }).unwrap();
-      setMsg("");
-      onCancelReply?.();
-    } catch (error) {
-      console.error("Failed to send message:", error);
+    const messageText = msg.trim();
+    setMsg(""); // Clear input immediately like WhatsApp
+    onCancelReply?.();
+
+    // Stop typing when sending message
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
     }
+    emitStopTyping();
+
+    // Use socket to send message for real-time updates
+    socket.emit("send-message", {
+      chatId,
+      sender: me._id,
+      text: messageText,
+      type: "text",
+      replyTo: replyTo?._id,
+      isForwarded: false,
+    });
   };
 
   return (
@@ -87,7 +116,8 @@ function ChatInput({ chatId, onOpenAttachment, replyTo, onCancelReply }) {
             ref={inputRef}
             className="border-0 bg-transparent flex-grow-1"
             value={msg}
-            onChange={(e) => setMsg(e.target.value)}
+            onChange={handleInputChange}
+            onBlur={handleInputBlur}
             placeholder="Type a message"
             style={{ outline: "none", fontSize: "0.95rem" }}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}

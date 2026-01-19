@@ -5,19 +5,30 @@ import {
   useRef,
   useLayoutEffect,
 } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { createSelector } from "@reduxjs/toolkit";
 import { FaPlay } from "react-icons/fa";
 import socket from "../../socketClient";
-import { useGetMessagesQuery } from "../../features/messages/messageApi";
+import { useGetMessagesQuery, useDeleteForMeMutation, useDeleteForEveryoneMutation, messageApi } from "../../features/messages/messageApi";
 import ForwardModal from "./ForwardModal";
 
+// Memoized selector for typing users
+const selectTypingUsers = createSelector(
+  [(state) => state.chat.typingUsers, (state, chatId) => chatId],
+  (typingUsers, chatId) => typingUsers[chatId] || []
+);
+
 function ChatMessages({ chatId, onReply }) {
-  const { data = [], isLoading } = useGetMessagesQuery(chatId, {
+  const { data = [], isLoading, refetch } = useGetMessagesQuery(chatId, {
     skip: !chatId,
     refetchOnMountOrArgChange: true,
   });
 
+  const dispatch = useDispatch();
   const me = useSelector((state) => state.auth.user);
+  const typingUsers = useSelector((state) => selectTypingUsers(state, chatId));
+  const [deleteForMeMutation] = useDeleteForMeMutation();
+  const [deleteForEveryoneMutation] = useDeleteForEveryoneMutation();
   const [socketMessages, setSocketMessages] = useState([]);
   const [preview, setPreview] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
@@ -40,9 +51,24 @@ function ChatMessages({ chatId, onReply }) {
       }
     };
 
+    const deletedHandler = (data) => {
+      console.log("📩 Message deleted received:", data);
+      if (data.messageId) {
+        console.log("🗑️ Removing message from local state:", data.messageId);
+        // Remove the message from socketMessages if it exists
+        setSocketMessages((prev) => prev.filter(msg => msg._id !== data.messageId));
+        // Also invalidate cache to ensure consistency
+        dispatch(messageApi.util.invalidateTags(["Messages"]));
+      }
+    };
+
     socket.on("new-message", handler);
-    return () => socket.off("new-message", handler);
-  }, [chatId]);
+    socket.on("message-deleted", deletedHandler);
+    return () => {
+      socket.off("new-message", handler);
+      socket.off("message-deleted", deletedHandler);
+    };
+  }, [chatId, dispatch]);
 
   /* MERGE */
   const messages = useMemo(() => {
@@ -187,22 +213,84 @@ function ChatMessages({ chatId, onReply }) {
                       >
                         Forward
                       </div>
+                      {m.type === "text" && (
+                        <div
+                          style={{
+                            padding: "8px 12px",
+                            cursor: "pointer",
+                            fontSize: "14px",
+                          }}
+                          onClick={() => {
+                            navigator.clipboard.writeText(m.text);
+                            setDropdownOpen(null);
+                          }}
+                        >
+                          Copy
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                        }}
+                        onClick={() => {
+                          deleteForMeMutation(m._id);
+                          setDropdownOpen(null);
+                        }}
+                      >
+                        Delete for me
+                      </div>
+                      {isMe && (
+                        <div
+                          style={{
+                            padding: "8px 12px",
+                            cursor: "pointer",
+                            fontSize: "14px",
+                          }}
+                          onClick={() => {
+                            deleteForEveryoneMutation(m._id);
+                            setDropdownOpen(null);
+                          }}
+                        >
+                          Delete for everyone
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* FORWARDED LABEL */}
-                  {m.isForwarded && (
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        color: "#666",
-                        marginBottom: "2px",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      Forwarded
+                  {m.deletedForAll ? (
+                    <div>
+                      {isMe ? "You deleted this message" : "This message was deleted"}
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          textAlign: "right",
+                          marginTop: 4,
+                          color: "#666",
+                        }}
+                      >
+                        {new Date(m.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
                     </div>
-                  )}
+                  ) : (
+                    <>
+                      {/* FORWARDED LABEL */}
+                      {m.isForwarded && (
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "#666",
+                            marginBottom: "2px",
+                            fontStyle: "italic",
+                          }}
+                        >
+                          Forwarded
+                        </div>
+                      )}
 
                   {/* REPLY PREVIEW */}
                   {m.replyTo && (
@@ -317,11 +405,32 @@ function ChatMessages({ chatId, onReply }) {
                       minute: "2-digit",
                     })}
                   </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
           );
         })}
+
+        {/* TYPING INDICATOR */}
+        {typingUsers.length > 0 && (
+          <div className="d-flex justify-content-start mb-2">
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: "18px 18px 18px 4px",
+                backgroundColor: "#ffffff",
+                boxShadow: "0 1px 1px rgba(0,0,0,0.15)",
+                fontSize: "14px",
+                color: "#666",
+                fontStyle: "italic",
+              }}
+            >
+              {typingUsers.length === 1 ? "Typing..." : `${typingUsers.length} people typing...`}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* PREVIEW MODAL (FIXED SIZE + CENTERED) */}

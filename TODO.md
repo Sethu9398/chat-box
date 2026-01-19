@@ -1,3 +1,3 @@
-- [x] Update ChatWindow.jsx to pass replyTo and onCancelReply props to ChatInput
-- [ ] Test the reply feature to ensure preview appears and reply context is shown in chat bubbles
-
+- [x] Add markAsRead function in messageController.js
+- [x] Add PUT /:id/read route in messageRoutes.js
+- [x] Fix typingUsers in ChatMessages.jsx by adding useSelector

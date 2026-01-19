@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import default_profile from "../../../../../Asset/userDB.avif";
 import { useGetMessagesQuery } from "../../features/messages/messageApi";
 import { useGetUserDetailsQuery } from "../../features/users/userApi";
@@ -71,6 +71,16 @@ function ChatInfoDrawer({ user, onClose }) {
   const [isMediaView, setIsMediaView] = useState(false);
   const [activeTab, setActiveTab] = useState("media");
   const [preview, setPreview] = useState(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every 60 seconds for lastSeen display
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <>

@@ -11,6 +11,7 @@ const {
   deleteForMe,
   deleteForEveryone,
   markAsRead,
+  markAsDelivered,
 } = require("../controllers/messageController");
 
 const router = express.Router();
@@ -30,5 +31,6 @@ router.post(
 router.put("/:id/delete-for-me", protect, deleteForMe);
 router.put("/:id/delete-for-everyone", protect, deleteForEveryone);
 router.put("/:id/read", protect, markAsRead);
+router.put("/:id/delivered", protect, markAsDelivered);
 
 module.exports = router;

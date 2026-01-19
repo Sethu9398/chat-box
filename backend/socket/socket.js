@@ -45,6 +45,11 @@ const socketServer = (io, onlineUsers) => {
       socket.join(chatId);
     });
 
+    /* LEAVE CHAT */
+    socket.on("leave-chat", (chatId) => {
+      socket.leave(chatId);
+    });
+
     /* TYPING INDICATOR */
     socket.on("start-typing", (data) => {
       const { chatId, userId } = data;

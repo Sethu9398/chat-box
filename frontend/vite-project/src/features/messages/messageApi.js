@@ -48,8 +48,15 @@ export const messageApi = createApi({
         method: "PUT",
       }),
       invalidatesTags: ["Messages"],
+    }),
+    markAsDelivered: builder.mutation({
+      query: (id) => ({
+        url: `/messages/${id}/delivered`,
+        method: "PUT",
+      }),
+      invalidatesTags: ["Messages"],
     })
   }),
 });
 
-export const { useGetMessagesQuery, useSendMessageMutation, useUploadMessageMutation, useDeleteForMeMutation, useDeleteForEveryoneMutation, useMarkAsReadMutation } = messageApi;
+export const { useGetMessagesQuery, useSendMessageMutation, useUploadMessageMutation, useDeleteForMeMutation, useDeleteForEveryoneMutation, useMarkAsReadMutation, useMarkAsDeliveredMutation } = messageApi;

@@ -76,15 +76,6 @@ function ChatHeader({ user, onOpenInfo }) {
           </div>
         </div>
       </div>
-
-      <button
-        onClick={onOpenInfo}
-        className="btn btn-sm btn-link text-dark"
-        title="Show chat info"
-        style={{ padding: "8px 12px" }}
-      >
-        <i className="bi bi-info-circle" style={{ fontSize: 20 }} />
-      </button>
     </div>
   );
 }

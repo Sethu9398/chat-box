@@ -64,6 +64,39 @@ const getMessages = async (req, res) => {
     .populate("replyTo")
     .sort({ createdAt: 1 });
 
+  // Mark messages as delivered if receiver is online (messages not sent by current user)
+  const onlineUsers = req.app.get("onlineUsers");
+  const isReceiverOnline = onlineUsers.has(req.user._id.toString());
+
+  if (isReceiverOnline) {
+    await Message.updateMany(
+      {
+        chatId,
+        sender: { $ne: req.user._id },
+        status: "sent",
+        deletedBy: { $ne: req.user._id },
+        deletedForAll: false
+      },
+      { status: "delivered" }
+    );
+
+    // Emit status updates to senders
+    const deliveredMessages = await Message.find({
+      chatId,
+      sender: { $ne: req.user._id },
+      status: "delivered",
+      deletedBy: { $ne: req.user._id },
+      deletedForAll: false
+    }).select("_id sender");
+
+    for (const msg of deliveredMessages) {
+      req.app.get("io").to(msg.sender.toString()).emit("status-update", {
+        messageId: msg._id.toString(),
+        status: "delivered"
+      });
+    }
+  }
+
   // Mark messages as read (messages not sent by current user)
   await Message.updateMany(
     {
@@ -120,10 +153,24 @@ const sendMessage = async (req, res) => {
     // 🔥 IMPORTANT: SEND TO SOCKET CLIENTS
     req.app.get("io").to(chatId.toString()).emit("new-message", populated);
 
-    // Update sidebar for all participants except sender (who will get direct update)
-    const chat = await Chat.findById(chatId).populate("participants");
-    const io = req.app.get("io");
+    // Mark message as delivered if receiver is online
     const onlineUsers = req.app.get("onlineUsers");
+    const chat = await Chat.findById(chatId).populate("participants");
+    for (const participant of chat.participants) {
+      if (participant._id.toString() !== req.user._id.toString()) {
+        const isReceiverOnline = onlineUsers.has(participant._id.toString());
+        if (isReceiverOnline) {
+          await Message.findByIdAndUpdate(message._id, { status: "delivered" });
+          req.app.get("io").to(req.user._id.toString()).emit("status-update", {
+            messageId: message._id.toString(),
+            status: "delivered"
+          });
+        }
+      }
+    }
+
+    // Update sidebar for all participants except sender (who will get direct update)
+    const io = req.app.get("io");
     for (const participant of chat.participants) {
       if (participant._id.toString() !== req.user._id.toString()) {
         // Check if participant is currently viewing the chat
@@ -181,8 +228,41 @@ const uploadMessage = async (req, res) => {
 
     const file = req.file;
 
+    // Upload to Cloudinary
+    const cloudinary = require("../config/cloudinary");
+    let result;
+    try {
+      result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: "chat/messages",
+            resource_type: "auto",
+            public_id: `message-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          },
+          (error, result) => {
+            if (error) {
+              console.error("Cloudinary upload error:", error);
+              reject(error);
+            } else {
+              resolve(result);
+            }
+          }
+        );
+
+        // Pipe the buffer to the upload stream
+        const bufferStream = require('stream').Readable.from(file.buffer);
+        bufferStream.pipe(uploadStream);
+      });
+    } catch (cloudinaryError) {
+      console.error("Cloudinary upload error:", cloudinaryError);
+      return res.status(500).json({
+        message: "File upload to cloud failed",
+        error: cloudinaryError.message,
+      });
+    }
+
     // ✅ CORRECT CLOUDINARY URL
-    const mediaUrl = file.path;
+    const mediaUrl = result.secure_url;
 
     const message = await Message.create({
       chatId,
@@ -210,10 +290,24 @@ const uploadMessage = async (req, res) => {
     // 🔥 REALTIME UPDATES
     req.app.get("io").to(chatId.toString()).emit("new-message", populated);
 
-    // Update sidebar for all participants except sender (who will get direct update)
-    const chat = await Chat.findById(chatId).populate("participants");
-    const io = req.app.get("io");
+    // Mark message as delivered if receiver is online
     const onlineUsers = req.app.get("onlineUsers");
+    const chat = await Chat.findById(chatId).populate("participants");
+    for (const participant of chat.participants) {
+      if (participant._id.toString() !== req.user._id.toString()) {
+        const isReceiverOnline = onlineUsers.has(participant._id.toString());
+        if (isReceiverOnline) {
+          await Message.findByIdAndUpdate(message._id, { status: "delivered" });
+          req.app.get("io").to(req.user._id.toString()).emit("status-update", {
+            messageId: message._id.toString(),
+            status: "delivered"
+          });
+        }
+      }
+    }
+
+    // Update sidebar for all participants except sender (who will get direct update)
+    const io = req.app.get("io");
     for (const participant of chat.participants) {
       if (participant._id.toString() !== req.user._id.toString()) {
         // Check if participant is currently viewing the chat
@@ -326,6 +420,9 @@ const deleteForEveryone = async (req, res) => {
     // Set deletedForAll
     await Message.findByIdAndUpdate(req.params.id, { deletedForAll: true });
 
+    // Get the updated message
+    const updatedMessage = await Message.findById(req.params.id).populate("sender", "name avatar").populate("replyTo");
+
     // Recalculate Chat.lastMessage
     const newLastMessage = await Message.findOne({
       chatId: message.chatId,
@@ -340,24 +437,51 @@ const deleteForEveryone = async (req, res) => {
 
     // Emit sidebar updates to all participants
     for (const participant of chat.participants) {
-      const lastVisibleMessage = await getLastVisibleMessage(message.chatId, participant._id);
-      let lastMessageText;
-      if (lastVisibleMessage) {
-        lastMessageText = getLastMessageText(lastVisibleMessage);
-      } else {
-        lastMessageText = "This message was deleted"; // If no visible messages, it means the deleted one was the last
+      // Use the same logic as getSidebarUsers: check the most recent message first
+      const mostRecentMessage = await Message.findOne({
+        chatId: message.chatId
+      }).sort({ createdAt: -1 });
+
+      let lastMessageText = "No messages yet";
+      let lastMessageCreatedAt = null;
+
+      if (mostRecentMessage) {
+        lastMessageCreatedAt = mostRecentMessage.createdAt.toISOString();
+        if (mostRecentMessage.deletedForAll) {
+          lastMessageText = "This message was deleted";
+        } else {
+          // Check if this message is visible to the user
+          const isVisible = !mostRecentMessage.deletedBy.includes(participant._id);
+          if (isVisible) {
+            if (mostRecentMessage.type === "text") lastMessageText = mostRecentMessage.text;
+            else if (mostRecentMessage.type === "image") lastMessageText = "📷 Photo";
+            else if (mostRecentMessage.type === "video") lastMessageText = "🎥 Video";
+            else if (mostRecentMessage.type === "file") lastMessageText = "📎 File";
+          } else {
+            // If the most recent is not visible, find the last visible one
+            const lastVisibleMessage = await getLastVisibleMessage(message.chatId, participant._id);
+            if (lastVisibleMessage) {
+              lastMessageText = getLastMessageText(lastVisibleMessage);
+              lastMessageCreatedAt = lastVisibleMessage.createdAt.toISOString();
+            } else {
+              lastMessageText = "No messages yet";
+              lastMessageCreatedAt = null;
+            }
+          }
+        }
       }
 
       req.app.get("io").to(participant._id.toString()).emit("sidebar-message-update", {
         chatId: message.chatId.toString(),
         lastMessageText,
-        lastMessageCreatedAt: lastVisibleMessage ? lastVisibleMessage.createdAt.toISOString() : null,
+        lastMessageCreatedAt,
         scope: "for-everyone"
       });
     }
 
-    // Emit to chat room for message deletion
-    req.app.get("io").to(message.chatId.toString()).emit("message-deleted", { messageId: req.params.id });
+    // Emit to chat room for message update (so it shows deleted immediately)
+    updatedMessage.chatId = updatedMessage.chatId.toString();
+    req.app.get("io").to(message.chatId.toString()).emit("message-updated", updatedMessage);
 
     res.json({ success: true })
   } catch (err) {

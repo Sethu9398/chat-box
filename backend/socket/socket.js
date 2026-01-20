@@ -20,6 +20,76 @@ const socketServer = (io, onlineUsers) => {
         io.emit("online-users", Array.from(onlineUsers.keys()));
         // Emit individual status update
         io.emit("user-status-update", { userId, isOnline: true, lastSeen: null });
+
+        // Mark pending messages as delivered
+        const chats = await Chat.find({ participants: userId });
+        for (const chat of chats) {
+          const pendingMessages = await Message.find({
+            chatId: chat._id,
+            sender: { $ne: userId },
+            status: "sent",
+            deletedForAll: false,
+            deletedBy: { $ne: userId }
+          }).select("_id sender");
+
+          if (pendingMessages.length > 0) {
+            // Update messages to delivered
+            await Message.updateMany(
+              {
+                chatId: chat._id,
+                sender: { $ne: userId },
+                status: "sent",
+                deletedForAll: false,
+                deletedBy: { $ne: userId }
+              },
+              { status: "delivered" }
+            );
+
+            // Emit status updates to senders
+            for (const msg of pendingMessages) {
+              io.to(msg.sender.toString()).emit("status-update", {
+                messageId: msg._id.toString(),
+                status: "delivered"
+              });
+            }
+          }
+        }
+
+        // Also check for messages sent by this user that can be marked as delivered
+        const sentMessages = await Message.find({
+          sender: userId,
+          status: "sent",
+          deletedForAll: false,
+          deletedBy: { $ne: userId }
+        }).populate('chatId');
+
+        for (const msg of sentMessages) {
+          const chat = msg.chatId;
+          const otherParticipants = chat.participants.filter(p => p.toString() !== userId);
+          const anyOnline = otherParticipants.some(p => onlineUsers.has(p.toString()));
+          if (anyOnline) {
+            await Message.findByIdAndUpdate(msg._id, { status: "delivered" });
+            io.to(userId).emit("status-update", {
+              messageId: msg._id.toString(),
+              status: "delivered"
+            });
+          }
+        }
+
+        // Emit status updates for messages sent by this user that are already delivered or read
+        const deliveredOrReadMessages = await Message.find({
+          sender: userId,
+          status: { $in: ["delivered", "read"] },
+          deletedForAll: false,
+          deletedBy: { $ne: userId }
+        }).select("_id status");
+
+        for (const msg of deliveredOrReadMessages) {
+          io.to(userId).emit("status-update", {
+            messageId: msg._id.toString(),
+            status: msg.status
+          });
+        }
       } catch (err) {
         console.error("❌ USER ONLINE UPDATE ERROR:", err);
       }
@@ -81,9 +151,25 @@ const socketServer = (io, onlineUsers) => {
         // 🔥 IMPORTANT: SEND TO SOCKET CLIENTS
         io.to(data.chatId).emit("new-message", populated);
 
+        // Get chat participants for delivery check and sidebar update
+        const chatDoc = await Chat.findById(data.chatId).populate("participants");
+
+        // Mark message as delivered if receiver is online
+        for (const participant of chatDoc.participants) {
+          if (participant._id.toString() !== data.sender.toString()) {
+            const isReceiverOnline = onlineUsers.has(participant._id.toString());
+            if (isReceiverOnline) {
+              await Message.findByIdAndUpdate(message._id, { status: "delivered" });
+              io.to(data.sender.toString()).emit("status-update", {
+                messageId: message._id.toString(),
+                status: "delivered"
+              });
+            }
+          }
+        }
+
         // Update sidebar for all participants except sender (who will get direct update)
-        const chat = await Chat.findById(data.chatId).populate("participants");
-        for (const participant of chat.participants) {
+        for (const participant of chatDoc.participants) {
           if (participant._id.toString() !== data.sender.toString()) {
             // Check if participant is currently viewing the chat
             const socketId = onlineUsers.get(participant._id.toString());

@@ -1,17 +1,18 @@
-# Fix Unread Notification Issue
+# TODO
 
-## Problem
-Unread notifications do not update in real-time when viewing a different user chat page. The unread count only updates after refreshing the website.
+## Fixed Issues
+- [x] Fix Cloudinary upload error: TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string. Received an instance of Buffer
+  - **Root Cause**: Cloudinary's `upload` method was receiving a Buffer from multer's memory storage but expecting a file path string.
+  - **Solution**: Replaced `cloudinary.uploader.upload(file.buffer, ...)` with `upload_stream` wrapped in a Promise to properly handle Buffer uploads.
+  - **Files Changed**: `backend/controllers/messageController.js`
+  - **Impact**: Fixes file upload functionality without affecting other features or design.
 
-## Root Cause
-When switching to a different chat, the socket does not leave the previous chat room, causing the backend to incorrectly think the user is still viewing the old chat, leading to wrong unread counts.
+## Testing Status
+- [x] Started backend server (already running on port 5000)
+- [x] Started frontend dev server (running on http://localhost:5174)
+- [ ] Manual testing of file upload through UI (requires user interaction)
+- [ ] API testing with curl (requires authentication token)
 
-## Plan
-1. Add a "leave-chat" event in the frontend ChatWindow.jsx when switching chats.
-2. Handle the "leave-chat" event in the backend socket.js to leave the room.
-3. Ensure proper sidebar updates when leaving a chat.
-
-## Steps
-- [ ] Modify ChatWindow.jsx to emit "leave-chat" for previous chat when switching
-- [ ] Update socket.js to handle "leave-chat" event
-- [ ] Test the fix to ensure unread counts update properly when switching chats
+## Pending Tasks
+- [ ] Test the file upload functionality to ensure it works correctly.
+- [ ] Verify that other message types (text, images, videos) still work as expected.

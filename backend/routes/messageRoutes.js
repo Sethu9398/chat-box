@@ -21,12 +21,7 @@ router.get("/:chatId", protect, getMessages);
 
 router.post("/", protect, sendMessage);
 
-router.post(
-  "/upload",
-  protect,
-  messageUpload,
-  uploadMessage
-);
+router.post("/upload", protect, messageUpload, uploadMessage);
 
 router.put("/:id/delete-for-me", protect, deleteForMe);
 router.put("/:id/delete-for-everyone", protect, deleteForEveryone);

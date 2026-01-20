@@ -50,10 +50,8 @@ function ChatMessages({ chatId, onReply }) {
     const handler = (msg) => {
       if (msg?.chatId?.toString() === chatId) {
         setSocketMessages((prev) => [...prev, msg]);
-        // Mark as delivered if not sent by me
+        // Mark as read since the chat is open
         if (msg.sender?._id !== me?._id) {
-          markAsDelivered(msg._id);
-          // Mark as read since the chat is open
           markAsRead(chatId);
         }
       }
@@ -70,6 +68,20 @@ function ChatMessages({ chatId, onReply }) {
       }
     };
 
+    const updatedHandler = (updatedMessage) => {
+      console.log("📩 Message updated received:", updatedMessage);
+      if (updatedMessage._id) {
+        // Update the message in socketMessages if it exists
+        setSocketMessages((prev) =>
+          prev.map((msg) =>
+            msg._id === updatedMessage._id ? { ...msg, ...updatedMessage } : msg
+          )
+        );
+        // Invalidate cache to update from server
+        dispatch(messageApi.util.invalidateTags(["Messages"]));
+      }
+    };
+
     const statusUpdateHandler = (data) => {
       console.log("📩 Status update received:", data);
       if (data.messageId && data.status) {
@@ -79,28 +91,40 @@ function ChatMessages({ chatId, onReply }) {
             msg._id === data.messageId ? { ...msg, status: data.status } : msg
           )
         );
-        // Invalidate cache to update from server
-        dispatch(messageApi.util.invalidateTags(["Messages"]));
+        // Update cached data directly
+        dispatch(messageApi.util.updateQueryData('getMessages', chatId, (draft) => {
+          const msg = draft.find(m => m._id === data.messageId);
+          if (msg) {
+            msg.status = data.status;
+          }
+        }));
       }
     };
 
     socket.on("new-message", handler);
     socket.on("message-deleted", deletedHandler);
+    socket.on("message-updated", updatedHandler);
     socket.on("status-update", statusUpdateHandler);
     return () => {
       socket.off("new-message", handler);
       socket.off("message-deleted", deletedHandler);
+      socket.off("message-updated", updatedHandler);
       socket.off("status-update", statusUpdateHandler);
     };
   }, [chatId, dispatch]);
 
   /* MERGE */
   const messages = useMemo(() => {
-    const all = [...data, ...socketMessages];
-    const unique = all.filter(
-      (m, i, arr) => arr.findIndex((x) => x._id === m._id) === i
-    );
-    return unique.sort(
+    const messageMap = new Map();
+
+    // First, add data messages
+    data.forEach(msg => messageMap.set(msg._id, msg));
+
+    // Then, add/override with socketMessages (prioritize real-time updates)
+    socketMessages.forEach(msg => messageMap.set(msg._id, msg));
+
+    // Convert back to array and sort
+    return Array.from(messageMap.values()).sort(
       (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
     );
   }, [data, socketMessages]);

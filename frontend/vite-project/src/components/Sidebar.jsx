@@ -3,14 +3,16 @@ import {
   FaMoon,
   FaSun,
   FaSignOutAlt,
+  FaBell,
 } from "react-icons/fa";
 import ProfileModal from "./ProfileModal";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { logoutUser } from "../features/auth/authSlice";
 import { useGetSidebarUsersQuery, userApi } from "../features/users/userApi";
 import { setSelectedUser } from "../features/chat/chatSlice";
+import { useGetRecentMessagesQuery, messageApi } from "../features/messages/messageApi";
 import socket from "../socketClient";
 import defaultprofile from "../../../../Asset/userDB.avif";
 
@@ -71,6 +73,7 @@ function Sidebar() {
   const [showProfile, setShowProfile] = useState(false);
   const [search, setSearch] = useState("");
   const [showMenu, setShowMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [theme, setTheme] = useState("light");
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -87,6 +90,8 @@ function Sidebar() {
     refetch,
   } = useGetSidebarUsersQuery();
 
+  const { data: recentMessages = [] } = useGetRecentMessagesQuery();
+
   // Update current time every 60 seconds for lastSeen display
   useEffect(() => {
     const timer = setInterval(() => {
@@ -94,6 +99,19 @@ function Sidebar() {
     }, 60000);
 
     return () => clearInterval(timer);
+  }, []);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.position-relative')) {
+        setShowMenu(false);
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   /* REAL-TIME SIDEBAR UPDATES */
@@ -153,6 +171,15 @@ function Sidebar() {
       }
     };
 
+    const newMessageHandler = (message) => {
+      console.log("📨 New message received for notifications:", message);
+      // Invalidate recent messages to trigger real-time refetch
+      // Only for messages not sent by current user
+      if (message.sender._id.toString() !== currentUser?._id.toString()) {
+        dispatch(messageApi.util.invalidateTags(["Messages"]));
+      }
+    };
+
     const onlineUsersHandler = (onlineUserIds) => {
       console.log("🟢 Online users update:", onlineUserIds);
       // Invalidate to refetch sidebar data to ensure lastSeen is updated from DB
@@ -180,17 +207,19 @@ function Sidebar() {
 
     socket.on("sidebar-update", handler);
     socket.on("sidebar-message-update", messageUpdateHandler);
+    socket.on("new-message", newMessageHandler);
     socket.on("online-users", onlineUsersHandler);
     socket.on("user-status-update", userStatusUpdateHandler);
     socket.on("connect", connectHandler);
     return () => {
       socket.off("sidebar-update", handler);
       socket.off("sidebar-message-update", messageUpdateHandler);
+      socket.off("new-message", newMessageHandler);
       socket.off("online-users", onlineUsersHandler);
       socket.off("user-status-update", userStatusUpdateHandler);
       socket.off("connect", connectHandler);
     };
-  }, [dispatch, refetch]);
+  }, [dispatch, refetch, currentUser?._id]);
 
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
@@ -208,6 +237,11 @@ function Sidebar() {
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Calculate total unread messages across all chats
+  const totalUnreadCount = useMemo(() => {
+    return users.reduce((total, user) => total + (Number(user.unreadCount) || 0), 0);
+  }, [users]);
 
   const getLastMessage = (msg) => {
     if (!msg) return "No messages yet";
@@ -232,6 +266,22 @@ function Sidebar() {
               style={{ cursor: "pointer" }}
               onClick={() => setShowProfile(true)}
             />
+
+            <div className="position-relative ms-3" style={{ cursor: "pointer" }} onClick={() => setShowNotifications((p) => !p)}>
+              <FaBell />
+              {totalUnreadCount > 0 && (
+                <span
+                  className="position-absolute bg-success rounded-circle"
+                  style={{
+                    top: -2,
+                    right: -2,
+                    width: 8,
+                    height: 8,
+                    border: "1px solid white",
+                  }}
+                ></span>
+              )}
+            </div>
 
             <FaEllipsisV
               className="ms-3"
@@ -263,6 +313,64 @@ function Sidebar() {
                   <FaSignOutAlt className="me-2" />
                   Logout
                 </div>
+              </div>
+            )}
+
+            {showNotifications && (
+              <div
+                className="position-absolute end-0 bg-white shadow rounded"
+                style={{
+                  top: "100%",
+                  marginTop: 8,
+                  width: 280,
+                  maxHeight: 300,
+                  overflowY: "auto",
+                  zIndex: 2000
+                }}
+              >
+                {recentMessages.length === 0 ? (
+                  <div className="p-3 text-muted text-center">
+                    No recent messages
+                  </div>
+                ) : (
+                  recentMessages.slice(0, 10).map((msg) => (
+                    <div
+                      key={msg._id}
+                      className="d-flex align-items-center p-2 border-bottom"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => {
+                        // Find the user from the chat participants
+                        const chatParticipants = msg.chatId.participants;
+                        const otherUserId = chatParticipants.find(p => p !== currentUser._id);
+                        if (otherUserId) {
+                          // Find the full user object from the users list
+                          const userToSelect = users.find(u => u._id === otherUserId);
+                          if (userToSelect) {
+                            dispatch(setSelectedUser(userToSelect));
+                          }
+                        }
+                        setShowNotifications(false);
+                      }}
+                    >
+                      <div className="flex-grow-1">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <strong className="text-truncate" style={{ maxWidth: 150 }}>
+                            {msg.sender.name}
+                          </strong>
+                          <small className="text-muted ms-2">
+                            {formatLastSeen(msg.createdAt)}
+                          </small>
+                        </div>
+                        <div className="text-muted small text-truncate">
+                          {msg.type === "text" ? msg.text :
+                           msg.type === "image" ? "📷 Photo" :
+                           msg.type === "video" ? "🎥 Video" :
+                           msg.type === "file" ? "📎 File" : "Message"}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>

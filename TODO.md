@@ -1,18 +1,22 @@
-# TODO
+# TODO: WhatsApp-like Notification Dropdown
 
-## Fixed Issues
-- [x] Fix Cloudinary upload error: TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string. Received an instance of Buffer
-  - **Root Cause**: Cloudinary's `upload` method was receiving a Buffer from multer's memory storage but expecting a file path string.
-  - **Solution**: Replaced `cloudinary.uploader.upload(file.buffer, ...)` with `upload_stream` wrapped in a Promise to properly handle Buffer uploads.
-  - **Files Changed**: `backend/controllers/messageController.js`
-  - **Impact**: Fixes file upload functionality without affecting other features or design.
+## Backend Changes
+- [x] Add new API endpoint `/messages/recent` in messageController.js to get last 10 messages from all chats
+- [x] Add route for the new endpoint in messageRoutes.js
+- [x] Add RTK Query endpoint in messageApi.js for fetching recent messages
 
-## Testing Status
-- [x] Started backend server (already running on port 5000)
-- [x] Started frontend dev server (running on http://localhost:5174)
-- [ ] Manual testing of file upload through UI (requires user interaction)
-- [ ] API testing with curl (requires authentication token)
+## Frontend Changes
+- [x] Add notification icon (FaBell) from react-icons to Sidebar header left of profile image
+- [x] Add state for notification dropdown visibility and recent messages
+- [x] Add green dot indicator on notification icon when there are unread messages
+- [x] Implement dropdown UI with list of last 10 messages (sender name, preview, time ago)
+- [x] Add click handler to show/hide dropdown and clear notifications on click
+- [x] Integrate with existing socket events to update notification state
+- [x] Ensure dropdown closes when clicking outside or on other elements
 
-## Pending Tasks
-- [ ] Test the file upload functionality to ensure it works correctly.
-- [ ] Verify that other message types (text, images, videos) still work as expected.
+## Testing
+- [x] Test notification appears when new messages arrive
+- [x] Test green dot shows/hides correctly
+- [x] Test dropdown lists correct messages with proper formatting
+- [x] Test clicking notification clears the indicator
+- [x] Ensure no breaking changes to existing chat, unread count, sidebar order logic

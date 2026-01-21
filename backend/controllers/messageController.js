@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Message = require("../models/Message");
 const Chat = require("../models/Chat");
 
@@ -58,6 +59,11 @@ const getOrCreateChat = async (req, res) => {
 ========================= */
 const getMessages = async (req, res) => {
   const { chatId } = req.params;
+
+  // Validate chatId is a valid ObjectId
+  if (!mongoose.Types.ObjectId.isValid(chatId)) {
+    return res.status(400).json({ message: "Invalid chatId" });
+  }
 
   const messages = await Message.find({ chatId, deletedBy: { $ne: req.user._id } })
     .populate("sender", "name avatar")
@@ -540,6 +546,45 @@ const markAsRead = async (req, res) => {
 };
 
 /* =========================
+   GET RECENT MESSAGES (for notifications)
+========================= */
+const getRecentMessages = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Get all chats where user is a participant
+    const chats = await Chat.find({ participants: userId }).select('_id');
+
+    if (chats.length === 0) {
+      return res.json([]);
+    }
+
+    const chatIds = chats.map(chat => chat._id);
+
+    // Get last 10 messages from all chats, excluding deleted ones
+    const recentMessages = await Message.find({
+      chatId: { $in: chatIds },
+      deletedForAll: false,
+      deletedBy: { $ne: userId }
+    })
+    .populate("sender", "name avatar")
+    .populate("chatId", "participants")
+    .sort({ createdAt: -1 })
+    .limit(10);
+
+    // Filter to only include messages from other users (not sent by current user)
+    const filteredMessages = recentMessages.filter(msg =>
+      msg.sender._id.toString() !== userId.toString()
+    );
+
+    res.json(filteredMessages);
+  } catch (err) {
+    console.error("❌ GET RECENT MESSAGES ERROR:", err);
+    res.status(500).json({ message: "Failed to get recent messages" });
+  }
+};
+
+/* =========================
    MARK AS DELIVERED
 ========================= */
 const markAsDelivered = async (req, res) => {
@@ -576,4 +621,5 @@ module.exports = {
   deleteForEveryone,
   markAsRead,
   markAsDelivered,
+  getRecentMessages,
 };

@@ -55,8 +55,12 @@ export const messageApi = createApi({
         method: "PUT",
       }),
       invalidatesTags: ["Messages"],
+    }),
+    getRecentMessages: builder.query({
+      query: () => "/messages/recent",
+      providesTags: ["Messages"],
     })
   }),
 });
 
-export const { useGetMessagesQuery, useSendMessageMutation, useUploadMessageMutation, useDeleteForMeMutation, useDeleteForEveryoneMutation, useMarkAsReadMutation, useMarkAsDeliveredMutation } = messageApi;
+export const { useGetMessagesQuery, useSendMessageMutation, useUploadMessageMutation, useDeleteForMeMutation, useDeleteForEveryoneMutation, useMarkAsReadMutation, useMarkAsDeliveredMutation, useGetRecentMessagesQuery } = messageApi;

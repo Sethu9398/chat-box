@@ -12,11 +12,13 @@ const {
   deleteForEveryone,
   markAsRead,
   markAsDelivered,
+  getRecentMessages,
 } = require("../controllers/messageController");
 
 const router = express.Router();
 
 router.get("/chat/:userId", protect, getOrCreateChat);
+router.get("/recent", protect, getRecentMessages);
 router.get("/:chatId", protect, getMessages);
 
 router.post("/", protect, sendMessage);

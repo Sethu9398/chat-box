@@ -165,6 +165,8 @@ const socketServer = (io, onlineUsers) => {
                 status: "delivered"
               });
             }
+            // Emit new-message to each participant for real-time sidebar updates
+            io.to(participant._id.toString()).emit("new-message", populated);
           }
         }
 

@@ -172,6 +172,8 @@ const sendMessage = async (req, res) => {
             status: "delivered"
           });
         }
+        // Emit new-message to each participant for real-time sidebar updates
+        req.app.get("io").to(participant._id.toString()).emit("new-message", populated);
       }
     }
 
@@ -304,6 +306,8 @@ const uploadMessage = async (req, res) => {
             status: "delivered"
           });
         }
+        // Emit new-message to each participant for real-time sidebar updates
+        req.app.get("io").to(participant._id.toString()).emit("new-message", populated);
       }
     }
 

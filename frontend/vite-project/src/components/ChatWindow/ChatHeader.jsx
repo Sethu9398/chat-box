@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { MdDelete, MdCheckBox } from "react-icons/md";
 import DEFAULT_AVATAR from "../../../../../Asset/userDB.avif";
 
 /* ⏱ FORMAT LAST SEEN */
@@ -19,7 +20,7 @@ const formatLastSeen = (lastSeen) => {
   })}`;
 };
 
-function ChatHeader({ user, onOpenInfo }) {
+function ChatHeader({ user, onOpenInfo, selectionMode, selectedMessages, onExitSelection, onDeleteSelected, onEnterSelection }) {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const avatar =
@@ -41,41 +42,75 @@ function ChatHeader({ user, onOpenInfo }) {
 
   return (
     <div className="d-flex align-items-center p-3 bg-light border-bottom justify-content-between">
-      <div
-        className="d-flex align-items-center flex-grow-1"
-        style={{ cursor: "pointer" }}
-        onClick={onOpenInfo}
-      >
-        <div className="position-relative">
-          <img
-            src={avatar}
-            className="rounded-circle me-2"
-            width="45"
-            height="45"
-            alt="Profile"
-            onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)}
-          />
-          <div
-            className="position-absolute"
-            style={{
-              bottom: 0,
-              right: 8,
-              width: 12,
-              height: 12,
-              borderRadius: "50%",
-              backgroundColor: isOnline ? "#25D366" : "#adb5bd",
-              border: "2px solid white",
-            }}
-          />
-        </div>
-
-        <div>
-          <strong>{user?.name || "User"}</strong>
-          <div className="text-muted" style={{ fontSize: "0.9rem" }}>
-            {isOnline ? "Online" : formatLastSeen(lastSeen)}
+      {selectionMode ? (
+        <>
+          <div className="d-flex align-items-center">
+            <button
+              className="btn btn-link p-0 me-3"
+              onClick={onExitSelection}
+              style={{ fontSize: "1.2rem", color: "#666" }}
+            >
+              ✕
+            </button>
+            <span>{selectedMessages.length} selected</span>
           </div>
-        </div>
-      </div>
+          <button
+            className="btn btn-link p-0"
+            onClick={onDeleteSelected}
+            disabled={selectedMessages.length === 0}
+            style={{ fontSize: "1.2rem", color: selectedMessages.length > 0 ? "#dc3545" : "#ccc" }}
+          >
+            Delete
+          </button>
+        </>
+      ) : (
+        <>
+          <div
+            className="d-flex align-items-center flex-grow-1"
+            style={{ cursor: "pointer" }}
+            onClick={onOpenInfo}
+          >
+            <div className="position-relative">
+              <img
+                src={avatar}
+                className="rounded-circle me-2"
+                width="45"
+                height="45"
+                alt="Profile"
+                onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)}
+              />
+              <div
+                className="position-absolute"
+                style={{
+                  bottom: 0,
+                  right: 8,
+                  width: 12,
+                  height: 12,
+                  borderRadius: "50%",
+                  backgroundColor: isOnline ? "#25D366" : "#adb5bd",
+                  border: "2px solid white",
+                }}
+              />
+            </div>
+
+            <div>
+              <strong>{user?.name || "User"}</strong>
+              <div className="text-muted" style={{ fontSize: "0.9rem" }}>
+                {isOnline ? "Online" : formatLastSeen(lastSeen)}
+              </div>
+            </div>
+          </div>
+
+          <button
+            className="btn btn-link p-0"
+            onClick={onEnterSelection}
+            style={{ fontSize: "1.2rem", color: "#666" }}
+            title="Select messages"
+          >
+            <MdCheckBox />
+          </button>
+        </>
+      )}
     </div>
   );
 }

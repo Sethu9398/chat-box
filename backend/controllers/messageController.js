@@ -236,27 +236,22 @@ const uploadMessage = async (req, res) => {
 
     // Upload to Cloudinary
     const cloudinary = require("../config/cloudinary");
+    const stream = require("stream");
     let result;
     try {
-      result = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          {
-            folder: "chat/messages",
-            resource_type: "auto",
-            public_id: `message-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          },
-          (error, result) => {
-            if (error) {
-              console.error("Cloudinary upload error:", error);
-              reject(error);
-            } else {
-              resolve(result);
-            }
-          }
-        );
+      const bufferStream = new stream.PassThrough();
+      bufferStream.end(file.buffer);
 
-        // Pipe the buffer to the upload stream
-        const bufferStream = require('stream').Readable.from(file.buffer);
+      result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream({
+          folder: "chat/messages",
+          resource_type: "auto",
+          public_id: `message-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timeout: 300000, // 300 seconds timeout (5 minutes)
+        }, (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        });
         bufferStream.pipe(uploadStream);
       });
     } catch (cloudinaryError) {

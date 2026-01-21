@@ -5,6 +5,7 @@ export const messageApi = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: import.meta.env.VITE_API_URL || "http://localhost:5000",
     credentials: "include",
+    timeout: 130000, // 130 seconds timeout for uploads
   }),
   endpoints: (builder) => ({
     getMessages: builder.query({

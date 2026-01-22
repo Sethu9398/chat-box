@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { MdDelete, MdCheckBox } from "react-icons/md";
+import { MdCheckBox } from "react-icons/md";
+import { FaArrowLeft } from "react-icons/fa";
 import DEFAULT_AVATAR from "../../../../../Asset/userDB.avif";
 
 /* ⏱ FORMAT LAST SEEN */
@@ -20,96 +21,98 @@ const formatLastSeen = (lastSeen) => {
   })}`;
 };
 
-function ChatHeader({ user, onOpenInfo, selectionMode, selectedMessages, onExitSelection, onDeleteSelected, onEnterSelection }) {
+function ChatHeader({
+  user,
+  isMobile,
+  onBack,
+  onOpenInfo,
+  selectionMode,
+  selectedMessages,
+  onExitSelection,
+  onDeleteSelected,
+  onEnterSelection,
+}) {
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const avatar =
     typeof user?.avatar === "string" && user.avatar.trim()
       ? user.avatar
       : DEFAULT_AVATAR;
 
-  const isOnline = user?.isOnline === true;
-  const lastSeen = user?.lastSeen ?? null;
-
-  // Update current time every 60 seconds for lastSeen display
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000);
-
-    return () => clearInterval(timer);
-  }, []);
-
   return (
-    <div className="d-flex align-items-center p-3 bg-light border-bottom justify-content-between">
+    <div className="d-flex align-items-center justify-content-between px-2 px-sm-3 py-2 bg-light border-bottom">
+      {/* LEFT */}
       {selectionMode ? (
-        <>
-          <div className="d-flex align-items-center">
-            <button
-              className="btn btn-link p-0 me-3"
-              onClick={onExitSelection}
-              style={{ fontSize: "1.2rem", color: "#666" }}
-            >
-              ✕
-            </button>
-            <span>{selectedMessages.length} selected</span>
-          </div>
+        <div className="d-flex align-items-center">
           <button
-            className="btn btn-link p-0"
-            onClick={onDeleteSelected}
-            disabled={selectedMessages.length === 0}
-            style={{ fontSize: "1.2rem", color: selectedMessages.length > 0 ? "#dc3545" : "#ccc" }}
+            className="btn btn-link p-0 me-2"
+            onClick={onExitSelection}
+            style={{ fontSize: "1.2rem" }}
           >
-            Delete
+            ✕
           </button>
-        </>
+          <strong>{selectedMessages.length} selected</strong>
+        </div>
       ) : (
-        <>
-          <div
-            className="d-flex align-items-center flex-grow-1"
-            style={{ cursor: "pointer" }}
-            onClick={onOpenInfo}
-          >
-            <div className="position-relative">
-              <img
-                src={avatar}
-                className="rounded-circle me-2"
-                width="45"
-                height="45"
-                alt="Profile"
-                onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)}
-              />
-              <div
-                className="position-absolute"
-                style={{
-                  bottom: 0,
-                  right: 8,
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  backgroundColor: isOnline ? "#25D366" : "#adb5bd",
-                  border: "2px solid white",
-                }}
-              />
-            </div>
+        <div
+          className="d-flex align-items-center flex-grow-1"
+          style={{ cursor: "pointer", minWidth: 0 }}
+          onClick={onOpenInfo}
+        >
+          {isMobile && (
+            <button
+              className="btn btn-link p-0 me-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                onBack();
+              }}
+            >
+              <FaArrowLeft size={20} />
+            </button>
+          )}
 
-            <div>
-              <strong>{user?.name || "User"}</strong>
-              <div className="text-muted" style={{ fontSize: "0.9rem" }}>
-                {isOnline ? "Online" : formatLastSeen(lastSeen)}
-              </div>
-            </div>
+          <img
+            src={avatar}
+            alt="avatar"
+            width="42"
+            height="42"
+            className="rounded-circle me-2 flex-shrink-0"
+            onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)}
+          />
+
+          <div className="text-truncate">
+            <strong className="d-block text-truncate">
+              {user?.name || "User"}
+            </strong>
+            <small className="text-muted">
+              {user?.isOnline ? "Online" : formatLastSeen(user?.lastSeen)}
+            </small>
           </div>
+        </div>
+      )}
 
-          <button
-            className="btn btn-link p-0"
-            onClick={onEnterSelection}
-            style={{ fontSize: "1.2rem", color: "#666" }}
-            title="Select messages"
-          >
-            <MdCheckBox />
-          </button>
-        </>
+      {/* RIGHT */}
+      {selectionMode ? (
+        <button
+          className="btn btn-link text-danger"
+          onClick={onDeleteSelected}
+          disabled={!selectedMessages.length}
+        >
+          Delete
+        </button>
+      ) : (
+        <button
+          className="btn btn-link"
+          onClick={onEnterSelection}
+          title="Select messages"
+        >
+          <MdCheckBox size={22} />
+        </button>
       )}
     </div>
   );

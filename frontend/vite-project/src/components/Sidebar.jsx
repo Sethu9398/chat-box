@@ -250,7 +250,7 @@ function Sidebar() {
   };
 
   return (
-    <div className="d-flex flex-column h-100 bg-white">
+    <div className="d-flex flex-column h-100" style={{ backgroundColor: '#f8f9fa' }}>
       {/* HEADER */}
       <div className="bg-light border-bottom">
         <div className="d-flex justify-content-between align-items-center p-3">

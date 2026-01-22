@@ -184,7 +184,25 @@ function ChatMessages({
                   </div>
 
                   {/* TEXT */}
-                  {m.type === "text" && <div>{m.text}</div>}
+                  {m.type === "text" && (
+                    <div style={{ position: 'relative' }}>
+                      {m.text}
+                      <span
+                        style={{
+                          float: 'right',
+                          fontSize: 11,
+                          color: '#999',
+                          marginLeft: '8px',
+                          lineHeight: '1.2'
+                        }}
+                      >
+                        {new Date(m.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  )}
 
                   {/* IMAGE */}
                   {m.type === "image" && (
@@ -229,13 +247,15 @@ function ChatMessages({
                     </div>
                   )}
 
-                  {/* TIME */}
-                  <div className="text-end text-muted mt-1" style={{ fontSize: 11 }}>
-                    {new Date(m.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
+                  {/* TIME - Only for non-text messages */}
+                  {m.type !== "text" && (
+                    <div className="text-end text-muted mt-1" style={{ fontSize: 11 }}>
+                      {new Date(m.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  )}
 
                   {/* DROPDOWN MENU */}
                   {dropdownOpen === m._id && (

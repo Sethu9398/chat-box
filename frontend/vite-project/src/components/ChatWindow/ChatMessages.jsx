@@ -18,7 +18,7 @@ const selectTypingUsers = createSelector(
   (typingUsers, chatId) => typingUsers[chatId] || []
 );
 
-function ChatMessages({ chatId, onReply }) {
+function ChatMessages({ chatId, onReply, selectionMode, selectedMessages, onToggleSelection, onEnterSelection }) {
   const { data = [], isLoading, refetch } = useGetMessagesQuery(chatId, {
     skip: !chatId,
     refetchOnMountOrArgChange: true,
@@ -134,6 +134,12 @@ function ChatMessages({ chatId, onReply }) {
     lastMessageRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleMessageClick = (messageId) => {
+    if (selectionMode && onToggleSelection) {
+      onToggleSelection(messageId);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="text-center mt-3 text-muted">
@@ -202,7 +208,23 @@ function ChatMessages({ chatId, onReply }) {
                   }}
                   onMouseEnter={() => setHoveredMessage(m._id)}
                   onMouseLeave={() => setHoveredMessage(null)}
+                  onClick={() => handleMessageClick(m._id)}
                 >
+                  {/* CHECKBOX */}
+                  {selectionMode && (
+                    <input
+                      type="checkbox"
+                      checked={selectedMessages.includes(m._id)}
+                      onChange={() => onToggleSelection(m._id)}
+                      style={{
+                        position: "absolute",
+                        top: "8px",
+                        left: isMe ? "8px" : "auto",
+                        right: isMe ? "auto" : "12px",
+                        zIndex: 10,
+                      }}
+                    />
+                  )}
                   {/* DROPDOWN BUTTON */}
                   {hoveredMessage === m._id && (
                     <div

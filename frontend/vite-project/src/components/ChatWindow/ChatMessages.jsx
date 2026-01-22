@@ -99,6 +99,25 @@ function ChatMessages({
     lastMessageRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  /* FORMAT DATE SEPARATOR */
+  const formatDateSeparator = (dateString) => {
+    const messageDate = new Date(dateString);
+    const now = new Date();
+    const diffTime = now - messageDate;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays <= 7) {
+      return messageDate.toLocaleDateString('en-US', { weekday: 'short' });
+    }
+    return messageDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
   if (isLoading) {
     return <p className="text-center text-muted mt-3">Loading messages…</p>;
   }
@@ -127,12 +146,7 @@ function ChatMessages({
             return (
               <div key={`date-${item.date}`} className="d-flex justify-content-center my-3">
                 <div className="bg-light text-muted px-3 py-1 rounded-pill small">
-                  {new Date(item.date).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  {formatDateSeparator(item.date)}
                 </div>
               </div>
             );

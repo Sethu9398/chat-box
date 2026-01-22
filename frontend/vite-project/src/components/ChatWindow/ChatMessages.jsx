@@ -163,130 +163,140 @@ function ChatMessages({
                 isMe ? "justify-content-end" : "justify-content-start"
               }`}
             >
-              <div
-                style={{ ...bubbleBase, background: isMe ? "#dcf8c6" : "#fff" }}
-                onClick={() =>
-                  selectionMode && onToggleSelection(m._id)
-                }
-                className="position-relative"
-              >
-                {/* DROPDOWN TRIGGER */}
+              <div className={`d-flex align-items-center ${isMe ? 'flex-row-reverse' : ''}`}>
                 <div
-                  className="position-absolute top-0 end-0 p-1"
-                  style={{ cursor: "pointer" }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDropdownOpen(dropdownOpen === m._id ? null : m._id);
-                  }}
+                  style={{ ...bubbleBase, background: selectedMessages.includes(m._id) ? "#ffcccc" : (isMe ? "#dcf8c6" : "#fff") }}
+                  onClick={() =>
+                    selectionMode && onToggleSelection(m._id)
+                  }
+                  className="position-relative"
                 >
-                  ⋮
-                </div>
-
-                {/* TEXT */}
-                {m.type === "text" && <div>{m.text}</div>}
-
-                {/* IMAGE */}
-                {m.type === "image" && (
-                  <div className="d-flex justify-content-center">
-                    <img
-                      src={m.mediaUrl}
-                      alt="img"
-                      style={mediaStyle}
-                      onClick={() => setPreview(m)}
-                    />
-                  </div>
-                )}
-
-                {/* VIDEO */}
-                {m.type === "video" && (
+                  {/* DROPDOWN TRIGGER */}
                   <div
-                    className="position-relative d-flex justify-content-center"
-                    onClick={() => setPreview(m)}
-                  >
-                    <video src={m.mediaUrl} style={mediaStyle} />
-                    <FaPlay
-                      style={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%,-50%)",
-                        fontSize: 42,
-                        color: "#fff",
-                      }}
-                    />
-                  </div>
-                )}
-
-                {/* FILE */}
-                {m.type === "file" && (
-                  <div
-                    className="text-primary text-truncate"
-                    style={{ maxWidth: 240, cursor: "pointer" }}
-                    onClick={() => setPreview(m)}
-                  >
-                    📄 {m.fileName}
-                  </div>
-                )}
-
-                {/* TIME */}
-                <div className="text-end text-muted mt-1" style={{ fontSize: 11 }}>
-                  {new Date(m.createdAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-
-                {/* DROPDOWN MENU */}
-                {dropdownOpen === m._id && (
-                  <div
-                    className="position-absolute bg-white border rounded shadow-sm p-2"
-                    style={{
-                      top: "100%",
-                      right: 0,
-                      zIndex: 10,
-                      minWidth: "120px",
+                    className="position-absolute top-0 end-0 p-1"
+                    style={{ cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDropdownOpen(dropdownOpen === m._id ? null : m._id);
                     }}
-                    onClick={(e) => e.stopPropagation()}
                   >
-                    <button
-                      className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
-                      onClick={() => {
-                        onReply(m);
-                        setDropdownOpen(null);
-                      }}
+                    ⋮
+                  </div>
+
+                  {/* TEXT */}
+                  {m.type === "text" && <div>{m.text}</div>}
+
+                  {/* IMAGE */}
+                  {m.type === "image" && (
+                    <div className="d-flex justify-content-center">
+                      <img
+                        src={m.mediaUrl}
+                        alt="img"
+                        style={mediaStyle}
+                        onClick={() => setPreview(m)}
+                      />
+                    </div>
+                  )}
+
+                  {/* VIDEO */}
+                  {m.type === "video" && (
+                    <div
+                      className="position-relative d-flex justify-content-center"
+                      onClick={() => setPreview(m)}
                     >
-                      Reply
-                    </button>
-                    <button
-                      className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
-                      onClick={() => {
-                        deleteForMe(m._id);
-                        setDropdownOpen(null);
-                      }}
+                      <video src={m.mediaUrl} style={mediaStyle} />
+                      <FaPlay
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%,-50%)",
+                          fontSize: 42,
+                          color: "#fff",
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* FILE */}
+                  {m.type === "file" && (
+                    <div
+                      className="text-primary text-truncate"
+                      style={{ maxWidth: 240, cursor: "pointer" }}
+                      onClick={() => setPreview(m)}
                     >
-                      Delete for me
-                    </button>
-                    {isMe && (
+                      📄 {m.fileName}
+                    </div>
+                  )}
+
+                  {/* TIME */}
+                  <div className="text-end text-muted mt-1" style={{ fontSize: 11 }}>
+                    {new Date(m.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+
+                  {/* DROPDOWN MENU */}
+                  {dropdownOpen === m._id && (
+                    <div
+                      className="position-absolute bg-white border rounded shadow-sm p-2"
+                      style={{
+                        top: "100%",
+                        right: 0,
+                        zIndex: 10,
+                        minWidth: "120px",
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <button
                         className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
                         onClick={() => {
-                          deleteForEveryone(m._id);
+                          onReply(m);
                           setDropdownOpen(null);
                         }}
                       >
-                        Delete for everyone
+                        Reply
                       </button>
-                    )}
-                    <button
-                      className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
-                      onClick={() => {
-                        setForwardModal(m);
-                        setDropdownOpen(null);
-                      }}
-                    >
-                      Forward
-                    </button>
-                  </div>
+                      <button
+                        className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
+                        onClick={() => {
+                          deleteForMe(m._id);
+                          setDropdownOpen(null);
+                        }}
+                      >
+                        Delete for me
+                      </button>
+                      {isMe && (
+                        <button
+                          className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
+                          onClick={() => {
+                            deleteForEveryone(m._id);
+                            setDropdownOpen(null);
+                          }}
+                        >
+                          Delete for everyone
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
+                        onClick={() => {
+                          setForwardModal(m);
+                          setDropdownOpen(null);
+                        }}
+                      >
+                        Forward
+                      </button>
+                      </div>
+                  )}
+                </div>
+                {selectionMode && (
+                  <input
+                    type="checkbox"
+                    checked={selectedMessages.includes(m._id)}
+                    onChange={() => onToggleSelection(m._id)}
+                    className="ms-2"
+                  />
                 )}
               </div>
             </div>

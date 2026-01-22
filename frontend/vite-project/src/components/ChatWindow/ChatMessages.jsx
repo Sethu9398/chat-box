@@ -9,572 +9,306 @@ import { useSelector, useDispatch } from "react-redux";
 import { createSelector } from "@reduxjs/toolkit";
 import { FaPlay } from "react-icons/fa";
 import socket from "../../socketClient";
-import { useGetMessagesQuery, useDeleteForMeMutation, useDeleteForEveryoneMutation, useMarkAsDeliveredMutation, useMarkAsReadMutation, messageApi } from "../../features/messages/messageApi";
+import {
+  useGetMessagesQuery,
+  useDeleteForMeMutation,
+  useDeleteForEveryoneMutation,
+  useMarkAsReadMutation,
+  messageApi,
+} from "../../features/messages/messageApi";
 import ForwardModal from "./ForwardModal";
 
-// Memoized selector for typing users
+/* TYPING USERS */
 const selectTypingUsers = createSelector(
   [(state) => state.chat.typingUsers, (state, chatId) => chatId],
   (typingUsers, chatId) => typingUsers[chatId] || []
 );
 
-function ChatMessages({ chatId, onReply, selectionMode, selectedMessages, onToggleSelection, onEnterSelection }) {
-  const { data = [], isLoading, refetch } = useGetMessagesQuery(chatId, {
+function ChatMessages({
+  chatId,
+  onReply,
+  selectionMode,
+  selectedMessages,
+  onToggleSelection,
+}) {
+  const { data = [], isLoading } = useGetMessagesQuery(chatId, {
     skip: !chatId,
-    refetchOnMountOrArgChange: true,
   });
 
   const dispatch = useDispatch();
   const me = useSelector((state) => state.auth.user);
-  const typingUsers = useSelector((state) => selectTypingUsers(state, chatId));
-  const [deleteForMeMutation] = useDeleteForMeMutation();
-  const [deleteForEveryoneMutation] = useDeleteForEveryoneMutation();
-  const [markAsDelivered] = useMarkAsDeliveredMutation();
+  const typingUsers = useSelector((state) =>
+    selectTypingUsers(state, chatId)
+  );
+
+  const [deleteForMe] = useDeleteForMeMutation();
+  const [deleteForEveryone] = useDeleteForEveryoneMutation();
   const [markAsRead] = useMarkAsReadMutation();
+
   const [socketMessages, setSocketMessages] = useState([]);
   const [preview, setPreview] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [forwardModal, setForwardModal] = useState(null);
-  const [hoveredMessage, setHoveredMessage] = useState(null);
-  const lastMessageRef = useRef(null);
 
-  /* RESET */
-  useEffect(() => {
-    setSocketMessages([]);
-  }, [chatId]);
+  const lastMessageRef = useRef(null);
 
   /* SOCKET */
   useEffect(() => {
     if (!chatId) return;
 
-    const handler = (msg) => {
-      if (msg?.chatId?.toString() === chatId) {
-        setSocketMessages((prev) => [...prev, msg]);
-        // Mark as read since the chat is open
-        if (msg.sender?._id !== me?._id) {
-          markAsRead(chatId);
-        }
+    const onNew = (msg) => {
+      if (msg.chatId === chatId) {
+        setSocketMessages((p) => [...p, msg]);
+        if (msg.sender?._id !== me?._id) markAsRead(chatId);
       }
     };
 
-    const deletedHandler = (data) => {
-      console.log("📩 Message deleted received:", data);
-      if (data.messageId) {
-        console.log("🗑️ Removing message from local state:", data.messageId);
-        // Remove the message from socketMessages if it exists
-        setSocketMessages((prev) => prev.filter(msg => msg._id !== data.messageId));
-        // Also invalidate cache to ensure consistency
-        dispatch(messageApi.util.invalidateTags(["Messages"]));
-      }
-    };
-
-    const updatedHandler = (updatedMessage) => {
-      console.log("📩 Message updated received:", updatedMessage);
-      if (updatedMessage._id) {
-        // Update the message in socketMessages if it exists
-        setSocketMessages((prev) =>
-          prev.map((msg) =>
-            msg._id === updatedMessage._id ? { ...msg, ...updatedMessage } : msg
-          )
-        );
-        // Invalidate cache to update from server
-        dispatch(messageApi.util.invalidateTags(["Messages"]));
-      }
-    };
-
-    const statusUpdateHandler = (data) => {
-      console.log("📩 Status update received:", data);
-      if (data.messageId && data.status) {
-        // Update status in socketMessages
-        setSocketMessages((prev) =>
-          prev.map((msg) =>
-            msg._id === data.messageId ? { ...msg, status: data.status } : msg
-          )
-        );
-        // Update cached data directly
-        dispatch(messageApi.util.updateQueryData('getMessages', chatId, (draft) => {
-          const msg = draft.find(m => m._id === data.messageId);
-          if (msg) {
-            msg.status = data.status;
-          }
-        }));
-      }
-    };
-
-    socket.on("new-message", handler);
-    socket.on("message-deleted", deletedHandler);
-    socket.on("message-updated", updatedHandler);
-    socket.on("status-update", statusUpdateHandler);
-    return () => {
-      socket.off("new-message", handler);
-      socket.off("message-deleted", deletedHandler);
-      socket.off("message-updated", updatedHandler);
-      socket.off("status-update", statusUpdateHandler);
-    };
-  }, [chatId, dispatch]);
+    socket.on("new-message", onNew);
+    return () => socket.off("new-message", onNew);
+  }, [chatId, me?._id, markAsRead]);
 
   /* MERGE */
   const messages = useMemo(() => {
-    const messageMap = new Map();
-
-    // First, add data messages
-    data.forEach(msg => messageMap.set(msg._id, msg));
-
-    // Then, add/override with socketMessages (prioritize real-time updates)
-    socketMessages.forEach(msg => messageMap.set(msg._id, msg));
-
-    // Convert back to array and sort
-    return Array.from(messageMap.values()).sort(
+    const map = new Map();
+    data.forEach((m) => map.set(m._id, m));
+    socketMessages.forEach((m) => map.set(m._id, m));
+    return [...map.values()].sort(
       (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
     );
   }, [data, socketMessages]);
+
+  /* GROUP MESSAGES BY DATE */
+  const messagesWithDates = useMemo(() => {
+    const grouped = [];
+    let currentDate = null;
+
+    messages.forEach((m) => {
+      const messageDate = new Date(m.createdAt).toDateString();
+      if (messageDate !== currentDate) {
+        grouped.push({ type: 'date', date: messageDate });
+        currentDate = messageDate;
+      }
+      grouped.push(m);
+    });
+
+    return grouped;
+  }, [messages]);
 
   /* SCROLL */
   useLayoutEffect(() => {
     lastMessageRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleMessageClick = (messageId) => {
-    if (selectionMode && onToggleSelection) {
-      onToggleSelection(messageId);
-    }
-  };
-
   if (isLoading) {
-    return (
-      <div className="text-center mt-3 text-muted">
-        Loading messages...
-      </div>
-    );
+    return <p className="text-center text-muted mt-3">Loading messages…</p>;
   }
 
+  const bubbleBase = {
+    maxWidth: "85%",
+    padding: "8px",
+    borderRadius: "18px",
+    boxShadow: "0 1px 1px rgba(0,0,0,.15)",
+    wordBreak: "break-word",
+  };
+
   const mediaStyle = {
-    maxWidth: "260px",
-    maxHeight: "260px",
-    borderRadius: "8px",
+    width: "100%",
+    maxWidth: 260,
+    maxHeight: 260,
+    borderRadius: 8,
     objectFit: "cover",
-    cursor: "pointer",
   };
-
-  const getDateLabel = (date) => {
-    const now = new Date();
-    const messageDate = new Date(date);
-    const diffTime = now - messageDate;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) {
-      return "Today";
-    } else if (diffDays === 1) {
-      return "Yesterday";
-    } else if (diffDays <= 7) {
-      return messageDate.toLocaleDateString('en-US', { weekday: 'short' });
-    } else {
-      return messageDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    }
-  };
-
-  let lastRenderedDate = null;
 
   return (
     <>
-      {/* CHAT BODY */}
-      <div
-        className="flex-grow-1 overflow-auto"
-        style={{ padding: "16px", backgroundColor: "#e5ddd5" }}
-      >
-        {messages.map((m, index) => {
+      <div className="flex-grow-1 overflow-auto px-2 px-sm-3 py-3" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width="100" height="100" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill-rule="evenodd"%3E%3Cg fill="%23f0f0f0" fill-opacity="0.1"%3E%3Cpath d="M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H96v-1z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")', backgroundColor: '#e5ddd5' }}>
+        {messagesWithDates.map((item, i) => {
+          if (item.type === 'date') {
+            return (
+              <div key={`date-${item.date}`} className="d-flex justify-content-center my-3">
+                <div className="bg-light text-muted px-3 py-1 rounded-pill small">
+                  {new Date(item.date).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </div>
+              </div>
+            );
+          }
+
+          const m = item;
           const isMe = m.sender?._id === me?._id;
-          const dateKey = new Date(m.createdAt).toDateString();
-          const showDate = lastRenderedDate !== dateKey;
-          if (showDate) lastRenderedDate = dateKey;
 
           return (
-            <div key={m._id}>
-              {showDate && (
-                <div className="text-center my-2">
-                  <span
-                    style={{
-                      background: "#e1f3fb",
-                      padding: "4px 12px",
-                      borderRadius: "12px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    {getDateLabel(m.createdAt)}
-                  </span>
-                </div>
-              )}
-
+            <div
+              key={m._id}
+              ref={i === messagesWithDates.length - 1 ? lastMessageRef : null}
+              className={`d-flex mb-2 ${
+                isMe ? "justify-content-end" : "justify-content-start"
+              }`}
+            >
               <div
-                id={`msg-${m._id}`}
-                ref={index === messages.length - 1 ? lastMessageRef : null}
-                className={`mb-2 d-flex ${
-                  isMe ? "justify-content-end" : "justify-content-start"
-                }`}
+                style={{ ...bubbleBase, background: isMe ? "#dcf8c6" : "#fff" }}
+                onClick={() =>
+                  selectionMode && onToggleSelection(m._id)
+                }
+                className="position-relative"
               >
+                {/* DROPDOWN TRIGGER */}
                 <div
-                  style={{
-                    maxWidth: "75%",
-                    padding: "8px",
-                    borderRadius: isMe
-                      ? "18px 18px 4px 18px"
-                      : "18px 18px 18px 4px",
-                    backgroundColor: isMe ? "#dcf8c6" : "#ffffff",
-                    boxShadow: "0 1px 1px rgba(0,0,0,0.15)",
-                    position: "relative",
+                  className="position-absolute top-0 end-0 p-1"
+                  style={{ cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen(dropdownOpen === m._id ? null : m._id);
                   }}
-                  onMouseEnter={() => setHoveredMessage(m._id)}
-                  onMouseLeave={() => setHoveredMessage(null)}
-                  onClick={() => handleMessageClick(m._id)}
                 >
-                  {/* CHECKBOX */}
-                  {selectionMode && (
-                    <input
-                      type="checkbox"
-                      checked={selectedMessages.includes(m._id)}
-                      onChange={() => onToggleSelection(m._id)}
-                      style={{
-                        position: "absolute",
-                        top: "8px",
-                        left: isMe ? "8px" : "auto",
-                        right: isMe ? "auto" : "12px",
-                        zIndex: 10,
-                      }}
-                    />
-                  )}
-                  {/* DROPDOWN BUTTON */}
-                  {hoveredMessage === m._id && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "4px",
-                        right: "4px",
-                        cursor: "pointer",
-                        fontSize: "14px",
-                        color: "#666",
-                      }}
-                      onClick={() => setDropdownOpen(dropdownOpen === m._id ? null : m._id)}
-                    >
-                      ⌄
-                    </div>
-                  )}
+                  ⋮
+                </div>
 
-                  {/* DROPDOWN MENU */}
-                  {dropdownOpen === m._id && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "20px",
-                        right: "4px",
-                        background: "#fff",
-                        border: "1px solid #ccc",
-                        borderRadius: "4px",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                        zIndex: 1000,
-                        minWidth: "80px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          padding: "8px 12px",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                        }}
-                        onClick={() => {
-                          onReply(m);
-                          setDropdownOpen(null);
-                        }}
-                      >
-                        Reply
-                      </div>
-                      <div
-                        style={{
-                          padding: "8px 12px",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                        }}
-                        onClick={() => {
-                          setForwardModal(m);
-                          setDropdownOpen(null);
-                        }}
-                      >
-                        Forward
-                      </div>
-                      {m.type === "text" && (
-                        <div
-                          style={{
-                            padding: "8px 12px",
-                            cursor: "pointer",
-                            fontSize: "14px",
-                          }}
-                          onClick={() => {
-                            navigator.clipboard.writeText(m.text);
-                            setDropdownOpen(null);
-                          }}
-                        >
-                          Copy
-                        </div>
-                      )}
-                      <div
-                        style={{
-                          padding: "8px 12px",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                        }}
-                        onClick={() => {
-                          deleteForMeMutation(m._id);
-                          setDropdownOpen(null);
-                        }}
-                      >
-                        Delete for me
-                      </div>
-                      {isMe && (
-                        <div
-                          style={{
-                            padding: "8px 12px",
-                            cursor: "pointer",
-                            fontSize: "14px",
-                          }}
-                          onClick={() => {
-                            deleteForEveryoneMutation(m._id);
-                            setDropdownOpen(null);
-                          }}
-                        >
-                          Delete for everyone
-                        </div>
-                      )}
-                    </div>
-                  )}
+                {/* TEXT */}
+                {m.type === "text" && <div>{m.text}</div>}
 
-                  {m.deletedForAll ? (
-                    <div>
-                      {isMe ? "You deleted this message" : "This message was deleted"}
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          textAlign: "right",
-                          marginTop: 4,
-                          color: "#666",
-                        }}
-                      >
-                        {new Date(m.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {/* FORWARDED LABEL */}
-                      {m.isForwarded && (
-                        <div
-                          style={{
-                            fontSize: "11px",
-                            color: "#666",
-                            marginBottom: "2px",
-                            fontStyle: "italic",
-                          }}
-                        >
-                          Forwarded
-                        </div>
-                      )}
-
-                  {/* REPLY PREVIEW */}
-                  {m.replyTo && (
-                    <div
-                      style={{
-                        background: "#f0f0f0",
-                        padding: "4px 8px",
-                        borderRadius: "4px",
-                        marginBottom: "4px",
-                        borderLeft: "3px solid #007bff",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                        color: "#666",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                      onClick={() => {
-                        const el = document.getElementById(`msg-${m.replyTo._id}`);
-                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      }}
-                    >
-                      {m.replyTo.type === "image" && m.replyTo.mediaUrl && (
-                        <img
-                          src={m.replyTo.mediaUrl}
-                          alt="reply thumbnail"
-                          style={{
-                            width: "40px",
-                            height: "40px",
-                            objectFit: "cover",
-                            borderRadius: "4px",
-                          }}
-                        />
-                      )}
-                      {m.replyTo.type === "video" && m.replyTo.mediaUrl && (
-                        <video
-                          src={m.replyTo.mediaUrl}
-                          style={{
-                            width: "40px",
-                            height: "40px",
-                            objectFit: "cover",
-                            borderRadius: "4px",
-                          }}
-                        />
-                      )}
-                      <div style={{ flex: 1 }}>
-                        <strong>{m.replyTo.sender?.name}:</strong>{" "}
-                        {m.replyTo.type === "text"
-                          ? m.replyTo.text
-                          : m.replyTo.type === "file"
-                          ? `📄 ${m.replyTo.fileName}`
-                          : `Media: ${m.replyTo.type}`}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TEXT */}
-                  {m.type === "text" && <div>{m.text}</div>}
-
-                  {/* IMAGE */}
-                  {m.type === "image" && m.mediaUrl && (
+                {/* IMAGE */}
+                {m.type === "image" && (
+                  <div className="d-flex justify-content-center">
                     <img
                       src={m.mediaUrl}
-                      alt="image"
+                      alt="img"
                       style={mediaStyle}
                       onClick={() => setPreview(m)}
                     />
-                  )}
-
-                  {/* VIDEO */}
-                  {m.type === "video" && m.mediaUrl && (
-                    <div
-                      style={{ position: "relative", display: "inline-block" }}
-                      onClick={() => setPreview(m)}
-                    >
-                      <video src={m.mediaUrl} style={mediaStyle} />
-                      <FaPlay
-                        style={{
-                          position: "absolute",
-                          top: "50%",
-                          left: "50%",
-                          transform: "translate(-50%, -50%)",
-                          fontSize: 42,
-                          color: "rgba(255,255,255,0.9)",
-                          pointerEvents: "none",
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {/* FILE */}
-                  {m.type === "file" && (
-                    <div
-                      style={{ cursor: "pointer", color: "#007bff" }}
-                      onClick={() => setPreview(m)}
-                    >
-                      📄 {m.fileName}
-                    </div>
-                  )}
-
-                  {/* TIME */}
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      textAlign: "right",
-                      marginTop: 4,
-                      color: "#666",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "flex-end",
-                      gap: "4px",
-                    }}
-                  >
-                    {new Date(m.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                    {isMe && (
-<span style={{ fontSize: "9px", color: m.status === "read" ? "#007bff" : m.status === "delivered" ? "#999" : "#666" }}>
-                        {m.status === "sent" && "✓"}
-                        {m.status === "delivered" && "✓✓"}
-                        {m.status === "read" && "✓✓"}
-                      </span>
-                    )}
                   </div>
-                    </>
-                  )}
+                )}
+
+                {/* VIDEO */}
+                {m.type === "video" && (
+                  <div
+                    className="position-relative d-flex justify-content-center"
+                    onClick={() => setPreview(m)}
+                  >
+                    <video src={m.mediaUrl} style={mediaStyle} />
+                    <FaPlay
+                      style={{
+                        position: "absolute",
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%,-50%)",
+                        fontSize: 42,
+                        color: "#fff",
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* FILE */}
+                {m.type === "file" && (
+                  <div
+                    className="text-primary text-truncate"
+                    style={{ maxWidth: 240, cursor: "pointer" }}
+                    onClick={() => setPreview(m)}
+                  >
+                    📄 {m.fileName}
+                  </div>
+                )}
+
+                {/* TIME */}
+                <div className="text-end text-muted mt-1" style={{ fontSize: 11 }}>
+                  {new Date(m.createdAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </div>
+
+                {/* DROPDOWN MENU */}
+                {dropdownOpen === m._id && (
+                  <div
+                    className="position-absolute bg-white border rounded shadow-sm p-2"
+                    style={{
+                      top: "100%",
+                      right: 0,
+                      zIndex: 10,
+                      minWidth: "120px",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
+                      onClick={() => {
+                        onReply(m);
+                        setDropdownOpen(null);
+                      }}
+                    >
+                      Reply
+                    </button>
+                    <button
+                      className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
+                      onClick={() => {
+                        deleteForMe(m._id);
+                        setDropdownOpen(null);
+                      }}
+                    >
+                      Delete for me
+                    </button>
+                    {isMe && (
+                      <button
+                        className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
+                        onClick={() => {
+                          deleteForEveryone(m._id);
+                          setDropdownOpen(null);
+                        }}
+                      >
+                        Delete for everyone
+                      </button>
+                    )}
+                    <button
+                      className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
+                      onClick={() => {
+                        setForwardModal(m);
+                        setDropdownOpen(null);
+                      }}
+                    >
+                      Forward
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
 
-        {/* TYPING INDICATOR */}
+        {/* TYPING */}
         {typingUsers.length > 0 && (
-          <div className="d-flex justify-content-start mb-2">
-            <div
-              style={{
-                padding: "8px 12px",
-                borderRadius: "18px 18px 18px 4px",
-                backgroundColor: "#ffffff",
-                boxShadow: "0 1px 1px rgba(0,0,0,0.15)",
-                fontSize: "14px",
-                color: "#666",
-                fontStyle: "italic",
-              }}
-            >
-              {typingUsers.length === 1 ? "Typing..." : `${typingUsers.length} people typing...`}
-            </div>
+          <div className="text-muted fst-italic small">
+            Typing…
           </div>
         )}
       </div>
 
-      {/* PREVIEW MODAL (FIXED SIZE + CENTERED) */}
-      {preview && preview.mediaUrl && (
+      {/* PREVIEW */}
+      {preview && (
         <div
-          className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
-          style={{ background: "rgba(0,0,0,0.85)", zIndex: 2000 }}
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{ background: "rgba(0,0,0,.85)", zIndex: 2000 }}
           onClick={() => setPreview(null)}
         >
-          {preview.type === "image" && (
+          {preview.type === "image" ? (
             <img
               src={preview.mediaUrl}
-              alt="preview"
-              style={{
-                maxWidth: "90vw",
-                maxHeight: "85vh",
-                objectFit: "contain",
-              }}
+              style={{ maxWidth: "90%", maxHeight: "90%" }}
             />
-          )}
-
-          {preview.type === "video" && (
+          ) : (
             <video
               src={preview.mediaUrl}
               controls
-              autoPlay
-              style={{
-                maxWidth: "90vw",
-                maxHeight: "85vh",
-                objectFit: "contain",
-              }}
+              style={{ maxWidth: "90%", maxHeight: "90%" }}
             />
-          )}
-
-          {preview.type === "file" && (
-            <a
-              href={preview.mediaUrl}
-              download
-              className="btn btn-success"
-            >
-              Download
-            </a>
           )}
         </div>
       )}
 
-      {/* FORWARD MODAL */}
       {forwardModal && (
         <ForwardModal
           message={forwardModal}

@@ -9,7 +9,7 @@ import AttachmentComposer from "./AttachmentComposer";
 import socket from "../../socketClient";
 import { useMarkAsReadMutation, useDeleteForMeMutation, useDeleteForEveryoneMutation } from "../../features/messages/messageApi";
 
-function ChatWindow({ user }) {
+function ChatWindow({ user, isMobile, onBack }) {
   const [showInfo, setShowInfo] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
@@ -99,14 +99,12 @@ function ChatWindow({ user }) {
   if (!user) return null;
 
   return (
-    <div
-      className="d-flex flex-column position-relative"
-      style={{ height: "100vh" }}
-    >
-      {/* HEADER */}
-      <div className="position-sticky top-0" style={{ zIndex: 1020 }}>
+   <div className="d-flex flex-column h-100" style={{ backgroundColor: '#f0f0f0' }}>
+      <div className="position-sticky top-0 z-3">
         <ChatHeader
           user={user}
+          isMobile={isMobile}
+          onBack={onBack}
           onOpenInfo={() => setShowInfo(true)}
           selectionMode={selectionMode}
           selectedMessages={selectedMessages}
@@ -116,11 +114,7 @@ function ChatWindow({ user }) {
         />
       </div>
 
-      {/* MESSAGES */}
-      <div
-        className="flex-grow-1 overflow-auto"
-        style={{ background: "#e5ddd5" }}
-      >
+      <div className="flex-grow-1 overflow-auto">
         <ChatMessages
           chatId={user.chatId}
           onReply={setReplyTo}
@@ -131,11 +125,7 @@ function ChatWindow({ user }) {
         />
       </div>
 
-      {/* INPUT */}
-      <div
-        className="position-sticky bottom-0 bg-white border-top"
-        style={{ zIndex: 1020 }}
-      >
+      <div className="position-sticky bottom-0 bg-white border-top">
         <ChatInput
           chatId={user.chatId}
           onOpenAttachment={() => setShowAttachment(true)}
@@ -143,26 +133,6 @@ function ChatWindow({ user }) {
           onCancelReply={() => setReplyTo(null)}
         />
       </div>
-
-      {/* INFO DRAWER */}
-      {showInfo && (
-        <ChatInfoDrawer
-          user={user}
-          onClose={() => setShowInfo(false)}
-        />
-      )}
-
-      {/* ✅ ATTACHMENT MODAL */}
-      {showAttachment && (
-        <AttachmentComposer
-          chatId={user.chatId}
-          replyTo={replyTo}
-          onClose={() => {
-            setShowAttachment(false);
-            setReplyTo(null); // Clear reply when closing attachment modal
-          }}
-        />
-      )}
     </div>
   );
 }

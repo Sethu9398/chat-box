@@ -156,6 +156,22 @@ function ChatMessages({ chatId, onReply, selectionMode, selectedMessages, onTogg
     cursor: "pointer",
   };
 
+  const getDateLabel = (date) => {
+    const now = new Date();
+    const messageDate = new Date(date);
+    const diffTime = now - messageDate;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) {
+      return "Today";
+    } else if (diffDays === 1) {
+      return "Yesterday";
+    } else if (diffDays <= 7) {
+      return messageDate.toLocaleDateString('en-US', { weekday: 'short' });
+    } else {
+      return messageDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+  };
+
   let lastRenderedDate = null;
 
   return (
@@ -183,7 +199,7 @@ function ChatMessages({ chatId, onReply, selectionMode, selectedMessages, onTogg
                       fontSize: "12px",
                     }}
                   >
-                    {dateKey}
+                    {getDateLabel(m.createdAt)}
                   </span>
                 </div>
               )}

@@ -1,4 +1,6 @@
-- [x] Add width: "100%" to the chat container in Home.jsx
-- [x] Add width: "100%" to the ChatWindow div in ChatWindow.jsx
-- [x] Add width: "100%" to the ChatMessages div in ChatMessages.jsx
-- [x] Reduce horizontal padding on mobile in ChatMessages from px-2 to px-1
+# TODO: Add Download Functionality for File Messages
+
+## Steps to Complete:
+- [x] Add a `downloadFile` helper function in `ChatMessages.jsx` to handle file downloads
+- [x] Modify the FILE message onClick handler to trigger download instead of preview
+- [ ] Test the download functionality for file messages

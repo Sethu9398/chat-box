@@ -153,9 +153,10 @@ function ChatMessages({
   }
 
   const bubbleBase = {
-    maxWidth: "85%",
-    padding: "8px",
-    borderRadius: "18px",
+    maxWidth: "90%",
+    padding: "10px",
+    paddingLeft: "12px",
+    borderRadius:"18px",
     boxShadow: "0 1px 1px rgba(0,0,0,.15)",
     wordBreak: "break-word",
   };
@@ -213,80 +214,146 @@ function ChatMessages({
                     ⋮
                   </div>
 
+                  {/* FORWARDED INDICATOR */}
+                  {m.isForwarded && (
+                    <div style={{
+                      fontSize: '12px',
+                      color: '#999',
+                      marginBottom: '4px',
+                      fontStyle: 'italic'
+                    }}>
+                      Forwarded
+                    </div>
+                  )}
+
+                  {/* REPLY PREVIEW */}
+                  {m.replyTo && (
+                    <div
+                      style={{
+                        backgroundColor: isMe ? '#ffffff20' : '#00000010',
+                        borderLeft: '3px solid #2196f3',
+                        padding: '6px 8px',
+                        marginBottom: '6px',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => {
+                        // Scroll to replied message if it exists in current messages
+                        const repliedMessageElement = document.getElementById(`message-${m.replyTo._id}`);
+                        if (repliedMessageElement) {
+                          repliedMessageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          // Add temporary highlight
+                          repliedMessageElement.style.backgroundColor = '#ffff0050';
+                          setTimeout(() => {
+                            repliedMessageElement.style.backgroundColor = '';
+                          }, 2000);
+                        }
+                      }}
+                    >
+                      <div style={{ fontWeight: 'bold', color: '#2196f3', marginBottom: '2px' }}>
+                        {m.replyTo.sender?.name}
+                      </div>
+                      <div style={{
+                        color: '#666',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {m.replyTo.type === "text"
+                          ? m.replyTo.text
+                          : m.replyTo.type === "image"
+                            ? "📷 Photo"
+                            : m.replyTo.type === "video"
+                              ? "🎥 Video"
+                              : m.replyTo.type === "file"
+                                ? `📎 ${m.replyTo.fileName}`
+                                : "Media"}
+                      </div>
+                    </div>
+                  )}
+
                   {/* TEXT */}
                   {m.type === "text" && (
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }} id={`message-${m._id}`}>
                       {m.text}
-                      <span
-                        style={{
-                          float: 'right',
-                          fontSize: 11,
-                          color: '#999',
-                          marginLeft: '8px',
-                          lineHeight: '1.2',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '11px', color: '#999', whiteSpace: 'nowrap' }}>
                         {new Date(m.createdAt).toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
                         {getTicks(m.status, isMe)}
-                      </span>
+                      </div>
                     </div>
                   )}
 
                   {/* IMAGE */}
                   {m.type === "image" && (
-                    <div className="d-flex justify-content-center">
-                      <img
-                        src={m.mediaUrl}
-                        alt="img"
-                        style={mediaStyle}
-                        onClick={() => setPreview(m)}
-                      />
+                    <div style={{ position: 'relative' }} id={`message-${m._id}`}>
+                      <div className="d-flex justify-content-center">
+                        <img
+                          src={m.mediaUrl}
+                          alt="img"
+                          style={mediaStyle}
+                          onClick={() => setPreview(m)}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '11px', color: '#999', whiteSpace: 'nowrap' }}>
+                        {new Date(m.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        {getTicks(m.status, isMe)}
+                      </div>
                     </div>
                   )}
 
                   {/* VIDEO */}
                   {m.type === "video" && (
-                    <div
-                      className="position-relative d-flex justify-content-center"
-                      onClick={() => setPreview(m)}
-                    >
-                      <video src={m.mediaUrl} style={mediaStyle} />
-                      <FaPlay
-                        style={{
-                          position: "absolute",
-                          top: "50%",
-                          left: "50%",
-                          transform: "translate(-50%,-50%)",
-                          fontSize: 42,
-                          color: "#fff",
-                        }}
-                      />
+                    <div style={{ position: 'relative' }} id={`message-${m._id}`}>
+                      <div
+                        className="position-relative d-flex justify-content-center"
+                        onClick={() => setPreview(m)}
+                      >
+                        <video src={m.mediaUrl} style={mediaStyle} />
+                        <FaPlay
+                          style={{
+                            position: "absolute",
+                            top: "50%",
+                            left: "50%",
+                            transform: "translate(-50%,-50%)",
+                            fontSize: 42,
+                            color: "#fff",
+                          }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '11px', color: '#999', whiteSpace: 'nowrap' }}>
+                        {new Date(m.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        {getTicks(m.status, isMe)}
+                      </div>
                     </div>
                   )}
 
                   {/* FILE */}
                   {m.type === "file" && (
-                    <div
-                      className="text-primary text-truncate"
-                      style={{ maxWidth: 240, cursor: "pointer" }}
-                      onClick={() => setPreview(m)}
-                    >
-                      📄 {m.fileName}
-                    </div>
-                  )}
-
-                  {/* TIME - Only for non-text messages */}
-                  {m.type !== "text" && (
-                    <div className="text-end text-muted mt-1" style={{ fontSize: 11 }}>
-                      {new Date(m.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                      {getTicks(m.status, isMe)}
+                    <div style={{ position: 'relative' }} id={`message-${m._id}`}>
+                      <div
+                        className="text-primary text-truncate"
+                        style={{ maxWidth: 240, cursor: "pointer" }}
+                        onClick={() => setPreview(m)}
+                      >
+                        📄 {m.fileName}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '11px', color: '#999', whiteSpace: 'nowrap' }}>
+                        {new Date(m.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        {getTicks(m.status, isMe)}
+                      </div>
                     </div>
                   )}
 

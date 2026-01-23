@@ -432,7 +432,17 @@ function Sidebar() {
               </div>
 
               {Number(u.unreadCount) > 0 && selectedUser?._id !== u._id && (
-                <span className="badge bg-success rounded-circle mt-1">
+                <span
+                  className="badge bg-success rounded-circle mt-1"
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '10px',
+                    padding: '5px',
+                  }}
+                >
                   {u.unreadCount}
                 </span>
               )}

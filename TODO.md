@@ -1,5 +1,4 @@
-- [x] Add socket listener for "status-update" to update message statuses in real-time
-- [x] Update messages merge logic to apply status updates
-- [x] Add getTicks function for rendering tick indicators
-- [x] Modify time display for text messages to include ticks
-- [x] Modify time display for non-text messages to include ticks
+- [x] Add width: "100%" to the chat container in Home.jsx
+- [x] Add width: "100%" to the ChatWindow div in ChatWindow.jsx
+- [x] Add width: "100%" to the ChatMessages div in ChatMessages.jsx
+- [x] Reduce horizontal padding on mobile in ChatMessages from px-2 to px-1

@@ -156,7 +156,7 @@ function ChatMessages({
     maxWidth: "90%",
     padding: "10px",
     paddingLeft: "12px",
-    borderRadius:"18px",
+    borderRadius: "18px",
     boxShadow: "0 1px 1px rgba(0,0,0,.15)",
     wordBreak: "break-word",
   };
@@ -190,9 +190,8 @@ function ChatMessages({
             <div
               key={m._id}
               ref={i === messagesWithDates.length - 1 ? lastMessageRef : null}
-              className={`d-flex mb-2 ${
-                isMe ? "justify-content-end" : "justify-content-start"
-              }`}
+              className={`d-flex mb-2 ${isMe ? "justify-content-end" : "justify-content-start"
+                }`}
             >
               <div className={`d-flex align-items-center ${isMe ? 'flex-row-reverse' : ''}`}>
                 <div
@@ -291,12 +290,28 @@ function ChatMessages({
                   {m.type === "image" && (
                     <div style={{ position: 'relative' }} id={`message-${m._id}`}>
                       <div className="d-flex justify-content-center">
-                        <img
-                          src={m.mediaUrl}
-                          alt="img"
-                          style={mediaStyle}
-                          onClick={() => setPreview(m)}
-                        />
+                        {preview && preview.mediaUrl && (
+                          <div
+                            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+                            style={{ background: "rgba(0,0,0,.85)", zIndex: 2000 }}
+                            onClick={() => setPreview(null)}
+                          >
+                            {preview.type === "image" ? (
+                              <img
+                                src={preview.mediaUrl}
+                                alt=""
+                                style={{ maxWidth: "90%", maxHeight: "90%" }}
+                              />
+                            ) : preview.type === "video" ? (
+                              <video
+                                src={preview.mediaUrl}
+                                controls
+                                style={{ maxWidth: "90%", maxHeight: "90%" }}
+                              />
+                            ) : null}
+                          </div>
+                        )}
+
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '11px', color: '#999', whiteSpace: 'nowrap' }}>
                         {new Date(m.createdAt).toLocaleTimeString([], {
@@ -407,7 +422,7 @@ function ChatMessages({
                       >
                         Forward
                       </button>
-                      </div>
+                    </div>
                   )}
                 </div>
                 {selectionMode && (

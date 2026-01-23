@@ -133,6 +133,14 @@ function ChatWindow({ user, isMobile, onBack }) {
           onCancelReply={() => setReplyTo(null)}
         />
       </div>
+
+      {showAttachment && (
+        <AttachmentComposer
+          chatId={user.chatId}
+          replyTo={replyTo}
+          onClose={() => setShowAttachment(false)}
+        />
+      )}
     </div>
   );
 }

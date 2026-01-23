@@ -290,28 +290,12 @@ function ChatMessages({
                   {m.type === "image" && (
                     <div style={{ position: 'relative' }} id={`message-${m._id}`}>
                       <div className="d-flex justify-content-center">
-                        {preview && preview.mediaUrl && (
-                          <div
-                            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-                            style={{ background: "rgba(0,0,0,.85)", zIndex: 2000 }}
-                            onClick={() => setPreview(null)}
-                          >
-                            {preview.type === "image" ? (
-                              <img
-                                src={preview.mediaUrl}
-                                alt=""
-                                style={{ maxWidth: "90%", maxHeight: "90%" }}
-                              />
-                            ) : preview.type === "video" ? (
-                              <video
-                                src={preview.mediaUrl}
-                                controls
-                                style={{ maxWidth: "90%", maxHeight: "90%" }}
-                              />
-                            ) : null}
-                          </div>
-                        )}
-
+                        <img
+                          src={m.mediaUrl}
+                          alt="Image"
+                          style={{ ...mediaStyle, cursor: 'pointer' }}
+                          onClick={() => setPreview(m)}
+                        />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '11px', color: '#999', whiteSpace: 'nowrap' }}>
                         {new Date(m.createdAt).toLocaleTimeString([], {

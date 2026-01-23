@@ -46,6 +46,7 @@ function ChatMessages({
   const [markAsRead] = useMarkAsReadMutation();
 
   const [socketMessages, setSocketMessages] = useState([]);
+  const [statusUpdates, setStatusUpdates] = useState({});
   const [preview, setPreview] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [forwardModal, setForwardModal] = useState(null);
@@ -63,8 +64,19 @@ function ChatMessages({
       }
     };
 
+    const onStatusUpdate = (update) => {
+      setStatusUpdates((prev) => ({
+        ...prev,
+        [update.messageId]: update.status,
+      }));
+    };
+
     socket.on("new-message", onNew);
-    return () => socket.off("new-message", onNew);
+    socket.on("status-update", onStatusUpdate);
+    return () => {
+      socket.off("new-message", onNew);
+      socket.off("status-update", onStatusUpdate);
+    };
   }, [chatId, me?._id, markAsRead]);
 
   /* MERGE */
@@ -72,10 +84,13 @@ function ChatMessages({
     const map = new Map();
     data.forEach((m) => map.set(m._id, m));
     socketMessages.forEach((m) => map.set(m._id, m));
-    return [...map.values()].sort(
+    return [...map.values()].map((m) => ({
+      ...m,
+      status: statusUpdates[m._id] || m.status,
+    })).sort(
       (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
     );
-  }, [data, socketMessages]);
+  }, [data, socketMessages, statusUpdates]);
 
   /* GROUP MESSAGES BY DATE */
   const messagesWithDates = useMemo(() => {
@@ -116,6 +131,21 @@ function ChatMessages({
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  /* GET TICKS */
+  const getTicks = (status, isMe) => {
+    if (!isMe) return "";
+    switch (status) {
+      case "sent":
+        return <span style={{ color: "#999" }}>✓</span>;
+      case "delivered":
+        return <span style={{ color: "#999" }}>✓✓</span>;
+      case "read":
+        return <span style={{ color: "#34B7F1" }}>✓✓</span>;
+      default:
+        return "";
+    }
   };
 
   if (isLoading) {
@@ -193,13 +223,15 @@ function ChatMessages({
                           fontSize: 11,
                           color: '#999',
                           marginLeft: '8px',
-                          lineHeight: '1.2'
+                          lineHeight: '1.2',
+                          whiteSpace: 'nowrap'
                         }}
                       >
                         {new Date(m.createdAt).toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
+                        {getTicks(m.status, isMe)}
                       </span>
                     </div>
                   )}
@@ -254,6 +286,7 @@ function ChatMessages({
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
+                      {getTicks(m.status, isMe)}
                     </div>
                   )}
 

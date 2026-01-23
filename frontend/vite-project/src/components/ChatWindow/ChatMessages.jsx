@@ -53,6 +53,16 @@ function ChatMessages({
 
   const lastMessageRef = useRef(null);
 
+  /* DOWNLOAD FILE HELPER */
+  const downloadFile = (url, filename) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   /* SOCKET */
   useEffect(() => {
     if (!chatId) return;
@@ -342,7 +352,7 @@ function ChatMessages({
                       <div
                         className="text-primary text-truncate"
                         style={{ maxWidth: 240, cursor: "pointer" }}
-                        onClick={() => setPreview(m)}
+                        onClick={() => downloadFile(m.mediaUrl, m.fileName)}
                       >
                         📄 {m.fileName}
                       </div>

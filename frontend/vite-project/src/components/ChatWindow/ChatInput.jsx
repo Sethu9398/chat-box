@@ -94,9 +94,9 @@ function ChatInput({ chatId, onOpenAttachment, replyTo, onCancelReply }) {
         </div>
       )}
 
-      <div className="d-flex align-items-center gap-2">
+      <div className="d-flex align-items-center gap-1 gap-sm-2">
         <div
-          className="d-flex align-items-center flex-grow-1 px-3"
+          className="d-flex align-items-center flex-grow-1 px-2 px-sm-3"
           style={{ backgroundColor: "#ffffff", borderRadius: "999px", height: "44px" }}
         >
           <FaSmile

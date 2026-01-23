@@ -99,7 +99,7 @@ function ChatWindow({ user, isMobile, onBack }) {
   if (!user) return null;
 
   return (
-   <div className="d-flex flex-column h-100" style={{ backgroundColor: '#f0f0f0' }}>
+   <div className="d-flex flex-column h-100" style={{ backgroundColor: '#f0f0f0', width: '100%' }}>
       <div className="position-sticky top-0 z-3">
         <ChatHeader
           user={user}

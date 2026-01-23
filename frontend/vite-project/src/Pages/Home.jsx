@@ -87,6 +87,7 @@ function Home() {
             height: "100vh",
             display: "flex",
             flexDirection: "column",
+            width: "100%",
           }}
         >
           {selectedUser ? (

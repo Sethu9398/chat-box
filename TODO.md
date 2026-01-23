@@ -1,6 +1,5 @@
-# TODO: Update Chat Message UI for Inline Time Display
-
-- [x] Modify ChatMessages.jsx to display message time inline with text for text messages, aligned to the right, without wrapping to new line.
-- [x] Ensure media messages (image, video, file) keep time below as before.
-- [x] Verify that dropdown, selection, and other functionalities remain intact.
-- [x] Confirm the UI behaves like WhatsApp for both short and long messages.
+- [x] Add socket listener for "status-update" to update message statuses in real-time
+- [x] Update messages merge logic to apply status updates
+- [x] Add getTicks function for rendering tick indicators
+- [x] Modify time display for text messages to include ticks
+- [x] Modify time display for non-text messages to include ticks

@@ -414,7 +414,7 @@ function Sidebar() {
               alt=""
             />
 
-            <div className="flex-grow-1">
+            <div className="flex-grow-1" style={{ minWidth: 0 }}>
               <strong>{u.name}</strong>
               <div className="text-muted small text-truncate">
                 {getLastMessage(u.lastMessage)}

@@ -141,6 +141,13 @@ function ChatWindow({ user, isMobile, onBack }) {
           onClose={() => setShowAttachment(false)}
         />
       )}
+
+      {showInfo && (
+        <ChatInfoDrawer
+          user={user}
+          onClose={() => setShowInfo(false)}
+        />
+      )}
     </div>
   );
 }

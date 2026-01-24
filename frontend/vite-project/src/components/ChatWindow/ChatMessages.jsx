@@ -372,8 +372,8 @@ function ChatMessages({
                       className="position-absolute bg-white border rounded shadow-sm p-2"
                       style={{
                         top: "100%",
-                        right: 0,
-                        zIndex: 10,
+                        [isMe ? 'right' : 'left']: 0,
+                        zIndex: 100,
                         minWidth: "120px",
                       }}
                       onClick={(e) => e.stopPropagation()}

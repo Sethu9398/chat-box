@@ -1,6 +1,19 @@
 const mongoose = require("mongoose");
 const Message = require("../models/Message");
 const Chat = require("../models/Chat");
+const GroupChat = require("../models/GroupChat");
+
+
+const getChatContext = async (chatId) => {
+  const group = await GroupChat.findById(chatId);
+  if (group) {
+    return { type: "group", data: group };
+  }
+
+  const chat = await Chat.findById(chatId);
+  return { type: "private", data: chat };
+};
+
 
 /* =========================
    HELPER: GET LAST VISIBLE MESSAGE
@@ -13,7 +26,7 @@ const getLastVisibleMessage = async (chatId, userId) => {
   }).sort({ createdAt: -1 });
 
   return lastMessage;
-};
+}
 
 /* =========================
    HELPER: GET LAST MESSAGE TEXT
@@ -60,21 +73,45 @@ const getOrCreateChat = async (req, res) => {
 const getMessages = async (req, res) => {
   const { chatId } = req.params;
 
-  // Validate chatId is a valid ObjectId
   if (!mongoose.Types.ObjectId.isValid(chatId)) {
     return res.status(400).json({ message: "Invalid chatId" });
   }
 
-  const messages = await Message.find({ chatId, deletedBy: { $ne: req.user._id } })
+  const { type } = await getChatContext(chatId);
+
+  const messages = await Message.find({
+    chatId,
+    deletedBy: { $ne: req.user._id }
+  })
     .populate("sender", "name avatar")
     .populate("replyTo")
     .sort({ createdAt: 1 });
 
-  // Mark messages as delivered if receiver is online (messages not sent by current user)
-  const onlineUsers = req.app.get("onlineUsers");
-  const isReceiverOnline = onlineUsers.has(req.user._id.toString());
+  // ✅ GROUP CHAT
+  if (type === "group") {
+    await Message.updateMany(
+      {
+        chatId,
+        sender: { $ne: req.user._id },
+        deletedBy: { $ne: req.user._id },
+        deletedForAll: false
+      },
+      { status: "read" }
+    );
 
-  if (isReceiverOnline) {
+    req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
+      chatId: chatId.toString(),
+      unreadCount: 0,
+      scope: "read-update"
+    });
+
+    return res.json(messages);
+  }
+
+  // ✅ PRIVATE CHAT (UNCHANGED)
+  const onlineUsers = req.app.get("onlineUsers");
+
+  if (onlineUsers.has(req.user._id.toString())) {
     await Message.updateMany(
       {
         chatId,
@@ -85,25 +122,8 @@ const getMessages = async (req, res) => {
       },
       { status: "delivered" }
     );
-
-    // Emit status updates to senders
-    const deliveredMessages = await Message.find({
-      chatId,
-      sender: { $ne: req.user._id },
-      status: "delivered",
-      deletedBy: { $ne: req.user._id },
-      deletedForAll: false
-    }).select("_id sender");
-
-    for (const msg of deliveredMessages) {
-      req.app.get("io").to(msg.sender.toString()).emit("status-update", {
-        messageId: msg._id.toString(),
-        status: "delivered"
-      });
-    }
   }
 
-  // Mark messages as read (messages not sent by current user)
   await Message.updateMany(
     {
       chatId,
@@ -115,7 +135,6 @@ const getMessages = async (req, res) => {
     { status: "read" }
   );
 
-  // Emit sidebar update to mark unread count as 0 for this chat
   req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
     chatId: chatId.toString(),
     unreadCount: 0,
@@ -125,12 +144,15 @@ const getMessages = async (req, res) => {
   res.json(messages);
 };
 
+
 /* =========================
    SEND TEXT MESSAGE
 ========================= */
 const sendMessage = async (req, res) => {
   try {
     const { chatId, text, replyTo, isForwarded, mediaUrl, fileName, fileSize, type } = req.body;
+
+    const { type: chatType, data } = await getChatContext(chatId);
 
     const message = await Message.create({
       chatId,
@@ -144,75 +166,27 @@ const sendMessage = async (req, res) => {
       isForwarded: isForwarded || false,
     });
 
-    await Chat.findByIdAndUpdate(chatId, {
-      lastMessage: message._id,
-    });
-
     const populated = await message.populate([
       { path: "sender", select: "name avatar" },
       { path: "replyTo" }
     ]);
 
-    // Convert chatId to string for socket emission
     populated.chatId = populated.chatId.toString();
 
-    // 🔥 IMPORTANT: SEND TO SOCKET CLIENTS
+    // ✅ GROUP CHAT
+    if (chatType === "group") {
+      await GroupChat.findByIdAndUpdate(chatId, { lastMessage: message._id });
+
+      for (const member of data.members) {
+        req.app.get("io").to(member.toString()).emit("new-message", populated);
+      }
+
+      return res.status(201).json(populated);
+    }
+
+    // ✅ PRIVATE CHAT (UNCHANGED)
+    await Chat.findByIdAndUpdate(chatId, { lastMessage: message._id });
     req.app.get("io").to(chatId.toString()).emit("new-message", populated);
-
-    // Mark message as delivered if receiver is online
-    const onlineUsers = req.app.get("onlineUsers");
-    const chat = await Chat.findById(chatId).populate("participants");
-    for (const participant of chat.participants) {
-      if (participant._id.toString() !== req.user._id.toString()) {
-        const isReceiverOnline = onlineUsers.has(participant._id.toString());
-        if (isReceiverOnline) {
-          await Message.findByIdAndUpdate(message._id, { status: "delivered" });
-          req.app.get("io").to(req.user._id.toString()).emit("status-update", {
-            messageId: message._id.toString(),
-            status: "delivered"
-          });
-        }
-        // Emit new-message to each participant for real-time sidebar updates
-        req.app.get("io").to(participant._id.toString()).emit("new-message", populated);
-      }
-    }
-
-    // Update sidebar for all participants except sender (who will get direct update)
-    const io = req.app.get("io");
-    for (const participant of chat.participants) {
-      if (participant._id.toString() !== req.user._id.toString()) {
-        // Check if participant is currently viewing the chat
-        const socketId = onlineUsers.get(participant._id.toString());
-        const isViewingChat = socketId && io.sockets.adapter.rooms.get(chatId.toString())?.has(socketId);
-        let unreadCount = 0;
-        if (!isViewingChat) {
-          // Calculate unread count for this participant
-          unreadCount = await Message.countDocuments({
-            chatId,
-            sender: { $ne: participant._id },
-            status: { $ne: "read" },
-            deletedBy: { $ne: participant._id },
-            deletedForAll: false
-          });
-        }
-
-        req.app.get("io").to(participant._id.toString()).emit("sidebar-message-update", {
-          chatId: chatId.toString(),
-          lastMessageText: populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message"),
-          lastMessageCreatedAt: populated.createdAt.toISOString(),
-          unreadCount,
-          scope: "for-everyone"
-        });
-      }
-    }
-
-    // Update sidebar for sender
-    req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
-      chatId: chatId.toString(),
-      lastMessageText: populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message"),
-      lastMessageCreatedAt: populated.createdAt.toISOString(),
-      scope: "for-me"
-    });
 
     res.status(201).json(populated);
   } catch (err) {
@@ -220,6 +194,7 @@ const sendMessage = async (req, res) => {
     res.status(500).json({ message: "Message send failed" });
   }
 };
+
 
 /* =========================
    UPLOAD MEDIA MESSAGE

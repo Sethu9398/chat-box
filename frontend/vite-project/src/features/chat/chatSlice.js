@@ -4,6 +4,7 @@ const chatSlice = createSlice({
   name: "chat",
   initialState: {
     selectedUser: null,
+    selectedGroup: null,
     typingUsers: {}, // { chatId: [userId1, userId2, ...] }
   },
   reducers: {
@@ -12,6 +13,12 @@ const chatSlice = createSlice({
     },
     clearSelectedUser: (state) => {
       state.selectedUser = null;
+    },
+    setSelectedGroup: (state, action) => {
+      state.selectedGroup = action.payload;
+    },
+    clearSelectedGroup: (state) => {
+      state.selectedGroup = null;
     },
     setTypingUsers: (state, action) => {
       const { chatId, users } = action.payload;
@@ -38,7 +45,7 @@ const chatSlice = createSlice({
   },
 });
 
-export const { setSelectedUser, clearSelectedUser, addTypingUser, removeTypingUser } = chatSlice.actions;
+export const { setSelectedUser, clearSelectedUser, setSelectedGroup, clearSelectedGroup, addTypingUser, removeTypingUser } = chatSlice.actions;
 export default chatSlice.reducer;
 
 

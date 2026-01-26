@@ -9,7 +9,7 @@ import AttachmentComposer from "./AttachmentComposer";
 import socket from "../../socketClient";
 import { useMarkAsReadMutation, useDeleteForMeMutation, useDeleteForEveryoneMutation } from "../../features/messages/messageApi";
 
-function ChatWindow({ user, isMobile, onBack }) {
+function ChatWindow({ user, group, isMobile, onBack }) {
   const [showInfo, setShowInfo] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
@@ -22,32 +22,37 @@ function ChatWindow({ user, isMobile, onBack }) {
   const [deleteForMeMutation] = useDeleteForMeMutation();
   const [deleteForEveryoneMutation] = useDeleteForEveryoneMutation();
 
+  // Determine chat entity (user or group)
+  const chatEntity = user || group;
+  const chatId = user ? user.chatId : group?._id;
+  const chatType = user ? 'user' : 'group';
+
   // ✅ JOIN SOCKET ROOM AND MARK MESSAGES AS READ
   useEffect(() => {
-    if (user?.chatId) {
+    if (chatId) {
       // Leave previous chat room if switching
-      if (previousChatId && previousChatId !== user.chatId) {
+      if (previousChatId && previousChatId !== chatId) {
         socket.emit("leave-chat", previousChatId);
       }
 
-      socket.emit("join-chat", user.chatId);
+      socket.emit("join-chat", chatId);
       // Mark all messages in this chat as read
-      markAsRead(user.chatId);
-      setPreviousChatId(user.chatId);
+      markAsRead(chatId);
+      setPreviousChatId(chatId);
     }
-  }, [user?.chatId, markAsRead, previousChatId]);
+  }, [chatId, markAsRead, previousChatId]);
 
   // ✅ REJOIN ON RECONNECT
   useEffect(() => {
     const handleConnect = () => {
-      if (user?.chatId) {
-        socket.emit("join-chat", user.chatId);
+      if (chatId) {
+        socket.emit("join-chat", chatId);
       }
     };
 
     socket.on("connect", handleConnect);
     return () => socket.off("connect", handleConnect);
-  }, [user?.chatId]);
+  }, [chatId]);
 
   // ✅ TYPING INDICATOR LISTENERS
   useEffect(() => {
@@ -96,13 +101,14 @@ function ChatWindow({ user, isMobile, onBack }) {
     exitSelectionMode();
   };
 
-  if (!user) return null;
+  if (!chatEntity) return null;
 
   return (
    <div className="d-flex flex-column h-100" style={{ backgroundColor: '#f0f0f0', width: '100%' }}>
       <div className="position-sticky top-0 z-3">
         <ChatHeader
           user={user}
+          group={group}
           isMobile={isMobile}
           onBack={onBack}
           onOpenInfo={() => setShowInfo(true)}
@@ -116,7 +122,7 @@ function ChatWindow({ user, isMobile, onBack }) {
 
       <div className="flex-grow-1 overflow-auto">
         <ChatMessages
-          chatId={user.chatId}
+          chatId={chatId}
           onReply={setReplyTo}
           selectionMode={selectionMode}
           selectedMessages={selectedMessages}
@@ -127,7 +133,7 @@ function ChatWindow({ user, isMobile, onBack }) {
 
       <div className="position-sticky bottom-0 bg-white border-top">
         <ChatInput
-          chatId={user.chatId}
+          chatId={chatId}
           onOpenAttachment={() => setShowAttachment(true)}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
@@ -136,7 +142,7 @@ function ChatWindow({ user, isMobile, onBack }) {
 
       {showAttachment && (
         <AttachmentComposer
-          chatId={user.chatId}
+          chatId={chatId}
           replyTo={replyTo}
           onClose={() => setShowAttachment(false)}
         />
@@ -145,6 +151,7 @@ function ChatWindow({ user, isMobile, onBack }) {
       {showInfo && (
         <ChatInfoDrawer
           user={user}
+          group={group}
           onClose={() => setShowInfo(false)}
         />
       )}

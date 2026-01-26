@@ -4,14 +4,19 @@ import {
   FaSun,
   FaSignOutAlt,
   FaBell,
+  FaPlus,
+  FaUsers,
 } from "react-icons/fa";
 import ProfileModal from "./ProfileModal";
+import UserSelectionModal from "./UserSelectionModal";
+import GroupCreationModal from "./GroupCreationModal";
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { logoutUser } from "../features/auth/authSlice";
 import { useGetSidebarUsersQuery, userApi } from "../features/users/userApi";
-import { setSelectedUser } from "../features/chat/chatSlice";
+import { setSelectedUser, setSelectedGroup } from "../features/chat/chatSlice";
+import { useGetMyGroupsQuery, chatApi } from "../features/chat/chatApi";
 import { useGetRecentMessagesQuery, messageApi } from "../features/messages/messageApi";
 import socket from "../socketClient";
 import defaultprofile from "../../../../Asset/userDB.avif";
@@ -76,6 +81,8 @@ function Sidebar() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [theme, setTheme] = useState("light");
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [showNewGroup, setShowNewGroup] = useState(false);
+  const [activeTab, setActiveTab] = useState('chat');
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -91,6 +98,7 @@ function Sidebar() {
   } = useGetSidebarUsersQuery();
 
   const { data: recentMessages = [] } = useGetRecentMessagesQuery();
+  const { data: groups = [] } = useGetMyGroupsQuery();
 
   // Update current time every 60 seconds for lastSeen display
   useEffect(() => {
@@ -200,6 +208,12 @@ function Sidebar() {
       }));
     };
 
+    const groupCreatedHandler = (group) => {
+      console.log("👥 Group created:", group);
+      // Invalidate groups cache to refetch and show the new group
+      dispatch(chatApi.util.invalidateTags(["Groups"]));
+    };
+
     const connectHandler = () => {
       console.log("🔌 Socket connected, refetching sidebar");
       refetch();
@@ -210,6 +224,7 @@ function Sidebar() {
     socket.on("new-message", newMessageHandler);
     socket.on("online-users", onlineUsersHandler);
     socket.on("user-status-update", userStatusUpdateHandler);
+    socket.on("group-created", groupCreatedHandler);
     socket.on("connect", connectHandler);
     return () => {
       socket.off("sidebar-update", handler);
@@ -217,6 +232,7 @@ function Sidebar() {
       socket.off("new-message", newMessageHandler);
       socket.off("online-users", onlineUsersHandler);
       socket.off("user-status-update", userStatusUpdateHandler);
+      socket.off("group-created", groupCreatedHandler);
       socket.off("connect", connectHandler);
     };
   }, [dispatch, refetch, currentUser?._id]);
@@ -236,6 +252,10 @@ function Sidebar() {
 
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const filteredGroups = groups.filter((g) =>
+    g.name.toLowerCase().includes(search.toLowerCase())
   );
 
   // Calculate total unread messages across all chats
@@ -385,9 +405,29 @@ function Sidebar() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
+        {/* TABS */}
+        <ul className="nav nav-tabs px-3">
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === 'chat' ? 'active' : ''}`}
+              onClick={() => setActiveTab('chat')}
+            >
+              Chat ({users.length})
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === 'groups' ? 'active' : ''}`}
+              onClick={() => setActiveTab('groups')}
+            >
+              Groups ({groups.length})
+            </button>
+          </li>
+        </ul>
       </div>
 
-      {/* USERS */}
+      {/* CHATS AND GROUPS */}
       <div className="flex-grow-1 overflow-auto">
         {isLoading && (
           <p className="text-center mt-3 text-muted">Loading chats…</p>
@@ -399,56 +439,111 @@ function Sidebar() {
           </p>
         )}
 
-        {filteredUsers.map((u) => (
-          <div
-            key={u._id}
-            className="d-flex align-items-center p-2 border-bottom"
-            style={{ cursor: "pointer" }}
-            onClick={() => dispatch(setSelectedUser(u))}
-                    >
-            <img
-              src={u.avatar || defaultprofile}
-              width="45"
-              height="45"
-              className="rounded-circle me-2"
-              alt=""
-            />
-
-            <div className="flex-grow-1" style={{ minWidth: 0 }}>
-              <strong>{u.name}</strong>
-              <div className="text-muted small text-truncate">
-                {getLastMessage(u.lastMessage)}
-              </div>
-            </div>
-
-            <div className="text-end ms-2" style={{ minWidth: 65 }}>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: u.isOnline ? "#28a745" : "#999",
-                }}
-              >
-                {u.isOnline ? "Online" : formatLastSeen(u.lastSeen)}
-              </div>
-
-              {Number(u.unreadCount) > 0 && selectedUser?._id !== u._id && (
-                <span
-                  className="badge bg-success rounded-circle mt-1"
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '10px',
-                    padding: '5px',
-                  }}
+        {activeTab === 'chat' && (
+          <>
+            {filteredUsers.length > 0 ? (
+              filteredUsers.map((u) => (
+                <div
+                  key={u._id}
+                  className="d-flex align-items-center p-2 border-bottom"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => dispatch(setSelectedUser(u))}
                 >
-                  {u.unreadCount}
-                </span>
-              )}
+                  <img
+                    src={u.avatar || defaultprofile}
+                    width="45"
+                    height="45"
+                    className="rounded-circle me-2"
+                    alt=""
+                  />
+
+                  <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                    <strong>{u.name}</strong>
+                    <div className="text-muted small text-truncate">
+                      {getLastMessage(u.lastMessage)}
+                    </div>
+                  </div>
+
+                  <div className="text-end ms-2" style={{ minWidth: 65 }}>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: u.isOnline ? "#28a745" : "#999",
+                      }}
+                    >
+                      {u.isOnline ? "Online" : formatLastSeen(u.lastSeen)}
+                    </div>
+
+                    {Number(u.unreadCount) > 0 && selectedUser?._id !== u._id && (
+                      <span
+                        className="badge bg-success rounded-circle mt-1"
+                        style={{
+                          width: '20px',
+                          height: '20px',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '10px',
+                          padding: '5px',
+                        }}
+                      >
+                        {u.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-center mt-3 text-muted">No chats yet</p>
+            )}
+          </>
+        )}
+
+        {activeTab === 'groups' && (
+          <>
+            <div className="px-3 py-3">
+              <button
+                className="btn btn-outline-success w-100"
+                onClick={() => setShowNewGroup(true)}
+              >
+                <FaUsers className="me-1" />
+                New Group
+              </button>
             </div>
-          </div>
-        ))}
+            {filteredGroups.length > 0 ? (
+              filteredGroups.map((g) => (
+                <div
+                  key={g._id}
+                  className="d-flex align-items-center p-2 border-bottom"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => dispatch(setSelectedGroup(g))}
+                >
+                  <img
+                    src={g.avatar || defaultprofile}
+                    width="45"
+                    height="45"
+                    className="rounded-circle me-2"
+                    alt=""
+                  />
+
+                  <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                    <strong>{g.name}</strong>
+                    <div className="text-muted small text-truncate">
+                      {getLastMessage(g.lastMessage)}
+                    </div>
+                  </div>
+
+                  <div className="text-end ms-2" style={{ minWidth: 65 }}>
+                    <small className="text-muted">
+                      {g.members.length} members
+                    </small>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-center mt-3 text-muted">No groups yet</p>
+            )}
+          </>
+        )}
       </div>
 
       {showProfile && (
@@ -457,6 +552,11 @@ function Sidebar() {
           onClose={() => setShowProfile(false)}
         />
       )}
+
+      <GroupCreationModal
+        isOpen={showNewGroup}
+        onClose={() => setShowNewGroup(false)}
+      />
     </div>
   );
 }

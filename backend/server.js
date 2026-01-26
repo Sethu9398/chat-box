@@ -8,6 +8,7 @@ const cookieParser = require("cookie-parser");
 const messageRoutes = require("./routes/messageRoutes");
 const userRoutes = require("./routes/userRoutes");
 const authRoutes = require("./routes/authRoutes");
+const groupRoutes = require("./routes/groupRoutes");
 const socketServer = require("./socket/socket");
 
 require("dotenv").config();
@@ -32,6 +33,8 @@ app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 app.use("/auth",authRoutes)
 app.use("/users",userRoutes)
 app.use("/messages", messageRoutes);
+app.use("/groups", groupRoutes);
+
 
 app.get("/", (req, res) => {
   res.send("API is running...");

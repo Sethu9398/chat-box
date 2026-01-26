@@ -2,13 +2,14 @@ import Sidebar from "../components/Sidebar";
 import ChatWindow from "../components/ChatWindow/ChatWindow";
 import { useSelector, useDispatch } from "react-redux";
 import { useEffect, useState } from "react";
-import { setSelectedUser } from "../features/chat/chatSlice";
+import { setSelectedUser, setSelectedGroup } from "../features/chat/chatSlice";
 import { useGetOrCreateChatMutation } from "../features/chat/chatApi";
 import socket from "../socketClient";
 
 function Home() {
   const dispatch = useDispatch();
   const selectedUser = useSelector((state) => state.chat.selectedUser);
+  const selectedGroup = useSelector((state) => state.chat.selectedGroup);
   const currentUser = useSelector((state) => state.auth.user);
   const [getOrCreateChat] = useGetOrCreateChatMutation();
 

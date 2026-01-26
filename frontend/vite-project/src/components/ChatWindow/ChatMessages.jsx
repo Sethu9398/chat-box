@@ -297,7 +297,7 @@ function ChatMessages({
                   )}
 
                   {/* IMAGE */}
-                  {m.type === "image" && (
+                  {m.type === "image" && m.mediaUrl && (
                     <div style={{ position: 'relative' }} id={`message-${m._id}`}>
                       <div className="d-flex justify-content-center">
                         <img
@@ -318,7 +318,7 @@ function ChatMessages({
                   )}
 
                   {/* VIDEO */}
-                  {m.type === "video" && (
+                  {m.type === "video" && m.mediaUrl && (
                     <div style={{ position: 'relative' }} id={`message-${m._id}`}>
                       <div
                         className="position-relative d-flex justify-content-center"

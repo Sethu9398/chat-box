@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useGetUsersQuery, useCreateGroupMutation } from '../features/chat/chatApi';
 import { useDispatch } from 'react-redux';
-import { setSelectedGroup } from '../features/chat/chatSlice';
+import { setSelectedGroup, setSelectedUser } from '../features/chat/chatSlice';
 import defaultprofile from "../../../../Asset/userDB.avif";
 
 const GroupCreationModal = ({ isOpen, onClose }) => {
@@ -51,6 +51,7 @@ const GroupCreationModal = ({ isOpen, onClose }) => {
         avatar: avatar
       }).unwrap();
       dispatch(setSelectedGroup(newGroup));
+      dispatch(setSelectedUser(null));
       onClose();
       setGroupName('');
       setSelectedUsers([]);

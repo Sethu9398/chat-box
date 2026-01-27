@@ -67,7 +67,7 @@ function Home() {
       }}
     >
       {/* SIDEBAR */}
-      {(!isMobile || !selectedUser) && (
+      {(!isMobile || (!selectedUser && !selectedGroup)) && (
         <div
           style={{
             width: isMobile ? "100%" : 320,
@@ -81,7 +81,7 @@ function Home() {
       )}
 
       {/* CHAT */}
-      {(!isMobile || selectedUser) && (
+      {(!isMobile || selectedUser || selectedGroup) && (
         <div
           style={{
             flex: 1,
@@ -91,11 +91,15 @@ function Home() {
             width: "100%",
           }}
         >
-          {selectedUser ? (
+          {selectedUser || selectedGroup ? (
             <ChatWindow
               user={selectedUser}
+              group={selectedGroup}
               isMobile={isMobile}
-              onBack={() => dispatch(setSelectedUser(null))}
+              onBack={() => {
+                if (selectedUser) dispatch(setSelectedUser(null));
+                if (selectedGroup) dispatch(setSelectedGroup(null));
+              }}
             />
           ) : (
             !isMobile && (

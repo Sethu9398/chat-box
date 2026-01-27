@@ -120,9 +120,10 @@ function ChatWindow({ user, group, isMobile, onBack }) {
         />
       </div>
 
-      <div className="flex-grow-1 overflow-auto">
+      <div className="flex-grow-1 overflow-auto" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width="100" height="100" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill-rule="evenodd"%3E%3Cg fill="%23f0f0f0" fill-opacity="0.1"%3E%3Cpath d="M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H96v-1z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")', backgroundColor: '#e5ddd5' }}>
         <ChatMessages
           chatId={chatId}
+          chatType={chatType}
           onReply={setReplyTo}
           selectionMode={selectionMode}
           selectedMessages={selectedMessages}

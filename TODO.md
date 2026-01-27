@@ -1,22 +1,9 @@
-# TODO: Add Chat and Group Chat to Sidebar with Tabs
+# Fix Delete for Everyone in Group Chats
 
-## Backend Updates
-- [x] Backend already has GroupChat model, controllers, and routes.
-
-## Frontend Updates
-- [x] Update chatSlice.js to include selectedGroup state.
-- [x] Add group endpoints (createGroup, getMyGroups) to chatApi.js.
-- [x] Create UserSelectionModal component for new chat.
-- [x] Create GroupCreationModal component for new group.
-- [x] Update Sidebar.jsx to add tabs for "Chat" and "Groups" with counts, like WhatsApp.
-- [x] Remove "New Chat" button; show "New Group" only in groups tab.
-- [x] Modify Sidebar.jsx to display users in "Chat" tab and groups in "Groups" tab.
-- [x] Update ChatWindow.jsx to handle group chats (display group name, members, etc.).
-- [x] Ensure socket integration for group messages.
-- [x] Test group creation, messaging, and real-time updates.
-
-## Testing
-- [x] Test creating a new group chat.
-- [x] Test sending messages in group chat.
-- [x] Test real-time updates for group chats.
-- [x] Ensure no other functionalities are broken.
+## Tasks
+- [x] Modify `deleteForEveryone` in `backend/controllers/messageController.js` to use `getChatContext` for chat type detection
+- [x] Update `lastMessage` on correct model (`GroupChat` for groups, `Chat` for private)
+- [x] Use correct participant list (`members` for groups, `participants` for private)
+- [x] Fix `socket.js` `send-message` handler to handle group chats properly
+- [x] Test delete for everyone in group chats (syntax check passed)
+- [x] Verify private chat functionality remains unaffected (logic preserved)

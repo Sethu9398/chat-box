@@ -26,6 +26,7 @@ const selectTypingUsers = createSelector(
 
 function ChatMessages({
   chatId,
+  chatType,
   onReply,
   selectionMode,
   selectedMessages,
@@ -52,6 +53,11 @@ function ChatMessages({
   const [forwardModal, setForwardModal] = useState(null);
 
   const lastMessageRef = useRef(null);
+
+  /* CLEAR SOCKET MESSAGES WHEN CHAT CHANGES */
+  useEffect(() => {
+    setSocketMessages([]);
+  }, [chatId]);
 
   /* DOWNLOAD FILE HELPER */
   const downloadFile = (url, filename) => {
@@ -81,11 +87,21 @@ function ChatMessages({
       }));
     };
 
+    const onMessageUpdated = (updatedMsg) => {
+      if (updatedMsg.chatId === chatId) {
+        setSocketMessages((prev) =>
+          prev.map(msg => msg._id === updatedMsg._id ? updatedMsg : msg)
+        );
+      }
+    };
+
     socket.on("new-message", onNew);
     socket.on("status-update", onStatusUpdate);
+    socket.on("message-updated", onMessageUpdated);
     return () => {
       socket.off("new-message", onNew);
       socket.off("status-update", onStatusUpdate);
+      socket.off("message-updated", onMessageUpdated);
     };
   }, [chatId, me?._id, markAsRead]);
 
@@ -94,12 +110,14 @@ function ChatMessages({
     const map = new Map();
     data.forEach((m) => map.set(m._id, m));
     socketMessages.forEach((m) => map.set(m._id, m));
-    return [...map.values()].map((m) => ({
-      ...m,
-      status: statusUpdates[m._id] || m.status,
-    })).sort(
-      (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-    );
+    return [...map.values()]
+      .filter((m) => !m.deletedForAll) // Filter out deleted for everyone messages
+      .map((m) => ({
+        ...m,
+        status: statusUpdates[m._id] || m.status,
+      })).sort(
+        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+      );
   }, [data, socketMessages, statusUpdates]);
 
   /* GROUP MESSAGES BY DATE */
@@ -162,8 +180,12 @@ function ChatMessages({
     return <p className="text-center text-muted mt-3">Loading messages…</p>;
   }
 
+  if (!messagesWithDates.length) {
+    return <p className="text-center text-muted mt-3">No messages yet</p>;
+  }
+
   const bubbleBase = {
-    maxWidth: "90%",
+    maxWidth: chatType === 'group' ? "100%" : "90%",
     padding: "10px",
     paddingLeft: "12px",
     borderRadius: "18px",
@@ -181,7 +203,7 @@ function ChatMessages({
 
   return (
     <>
-      <div className="flex-grow-1 overflow-auto px-2 px-sm-3 py-3" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width="100" height="100" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill-rule="evenodd"%3E%3Cg fill="%23f0f0f0" fill-opacity="0.1"%3E%3Cpath d="M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H96v-1z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")', backgroundColor: '#e5ddd5' }}>
+      <div className={`flex-grow-1 overflow-auto ${chatType === 'group' ? 'px-0' : 'px-2'} px-sm-3 py-3`}>
         {messagesWithDates.map((item, i) => {
           if (item.type === 'date') {
             return (

@@ -1,5 +1,6 @@
 const Message = require("../models/Message");
 const Chat = require("../models/Chat");
+const GroupChat = require("../models/GroupChat");
 const User = require("../models/User");
 
 const socketServer = (io, onlineUsers) => {
@@ -136,9 +137,19 @@ const socketServer = (io, onlineUsers) => {
       try {
         const message = await Message.create(data);
 
-        await Chat.findByIdAndUpdate(data.chatId, {
-          lastMessage: message._id,
-        });
+        // Determine if it's a group or private chat
+        const groupChat = await GroupChat.findById(data.chatId);
+        if (groupChat) {
+          // Group chat
+          await GroupChat.findByIdAndUpdate(data.chatId, {
+            lastMessage: message._id,
+          });
+        } else {
+          // Private chat
+          await Chat.findByIdAndUpdate(data.chatId, {
+            lastMessage: message._id,
+          });
+        }
 
         const populated = await message.populate([
           { path: "sender", select: "name avatar" },
@@ -151,27 +162,40 @@ const socketServer = (io, onlineUsers) => {
         // 🔥 IMPORTANT: SEND TO SOCKET CLIENTS
         io.to(data.chatId).emit("new-message", populated);
 
-        // Get chat participants for delivery check and sidebar update
-        const chatDoc = await Chat.findById(data.chatId).populate("participants");
+        // Get chat participants/members for delivery check and sidebar update
+        let participants = [];
+        if (groupChat) {
+          participants = groupChat.members;
+        } else {
+          const chatDoc = await Chat.findById(data.chatId).populate("participants");
+          participants = chatDoc.participants;
+        }
 
-        // Mark message as delivered if receiver is online
-        for (const participant of chatDoc.participants) {
-          if (participant._id.toString() !== data.sender.toString()) {
-            const isReceiverOnline = onlineUsers.has(participant._id.toString());
-            if (isReceiverOnline) {
-              await Message.findByIdAndUpdate(message._id, { status: "delivered" });
-              io.to(data.sender.toString()).emit("status-update", {
-                messageId: message._id.toString(),
-                status: "delivered"
-              });
+        // Mark message as delivered if receiver is online (only for private chats)
+        if (!groupChat) {
+          for (const participant of participants) {
+            if (participant._id.toString() !== data.sender.toString()) {
+              const isReceiverOnline = onlineUsers.has(participant._id.toString());
+              if (isReceiverOnline) {
+                await Message.findByIdAndUpdate(message._id, { status: "delivered" });
+                io.to(data.sender.toString()).emit("status-update", {
+                  messageId: message._id.toString(),
+                  status: "delivered"
+                });
+              }
             }
-            // Emit new-message to each participant for real-time sidebar updates
+          }
+        }
+
+        // Emit new-message to each participant for real-time sidebar updates
+        for (const participant of participants) {
+          if (participant._id.toString() !== data.sender.toString()) {
             io.to(participant._id.toString()).emit("new-message", populated);
           }
         }
 
         // Update sidebar for all participants except sender (who will get direct update)
-        for (const participant of chatDoc.participants) {
+        for (const participant of participants) {
           if (participant._id.toString() !== data.sender.toString()) {
             // Check if participant is currently viewing the chat
             const socketId = onlineUsers.get(participant._id.toString());

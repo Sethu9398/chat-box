@@ -324,9 +324,16 @@ const uploadMessage = async (req, res) => {
           });
         }
 
+        // Format lastMessageText with sender name for groups
+        let lastMessageText = populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message");
+        if (chatType === "group") {
+          const senderName = populated.sender._id.toString() === participant._id.toString() ? "You" : populated.sender.name;
+          lastMessageText = `${senderName}: ${lastMessageText}`;
+        }
+
         req.app.get("io").to(participant._id.toString()).emit("sidebar-message-update", {
           chatId: chatId.toString(),
-          lastMessageText: populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message"),
+          lastMessageText,
           lastMessageCreatedAt: populated.createdAt.toISOString(),
           unreadCount,
           scope: "for-everyone"
@@ -466,12 +473,24 @@ const deleteForEveryone = async (req, res) => {
             else if (mostRecentMessage.type === "image") lastMessageText = "📷 Photo";
             else if (mostRecentMessage.type === "video") lastMessageText = "🎥 Video";
             else if (mostRecentMessage.type === "file") lastMessageText = "📎 File";
+
+            // Format with sender name for groups
+            if (chatType === "group") {
+              const senderName = mostRecentMessage.sender._id.toString() === participant._id.toString() ? "You" : mostRecentMessage.sender.name;
+              lastMessageText = `${senderName}: ${lastMessageText}`;
+            }
           } else {
             // If the most recent is not visible, find the last visible one
             const lastVisibleMessage = await getLastVisibleMessage(message.chatId, participant._id);
             if (lastVisibleMessage) {
               lastMessageText = getLastMessageText(lastVisibleMessage);
               lastMessageCreatedAt = lastVisibleMessage.createdAt.toISOString();
+
+              // Format with sender name for groups
+              if (chatType === "group") {
+                const senderName = lastVisibleMessage.sender._id.toString() === participant._id.toString() ? "You" : lastVisibleMessage.sender.name;
+                lastMessageText = `${senderName}: ${lastMessageText}`;
+              }
             } else {
               lastMessageText = "No messages yet";
               lastMessageCreatedAt = null;

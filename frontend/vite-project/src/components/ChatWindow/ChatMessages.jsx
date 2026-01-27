@@ -245,6 +245,13 @@ function ChatMessages({
                     ⋮
                   </div>
 
+                  {/* SENDER NAME */}
+                  {!isMe && chatType === 'group' && (
+                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px', fontWeight: 'bold' }}>
+                      {m.sender?.name}
+                    </div>
+                  )}
+
                   {/* FORWARDED INDICATOR */}
                   {m.isForwarded && (
                     <div style={{
@@ -400,6 +407,17 @@ function ChatMessages({
                       }}
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {m.type === "text" && (
+                        <button
+                          className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
+                          onClick={() => {
+                            navigator.clipboard.writeText(m.text);
+                            setDropdownOpen(null);
+                          }}
+                        >
+                          Copy
+                        </button>
+                      )}
                       <button
                         className="btn btn-sm btn-link text-decoration-none d-block w-100 text-start"
                         onClick={() => {

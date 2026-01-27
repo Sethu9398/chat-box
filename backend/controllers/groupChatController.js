@@ -66,8 +66,41 @@ const getMyGroups = async (req, res) => {
   const groups = await GroupChat.find({
     members: req.user._id,
   })
-    .populate("lastMessage")
+    .populate({
+      path: "lastMessage",
+      populate: {
+        path: "sender",
+        select: "name"
+      }
+    })
     .populate("members", "name avatar isOnline");
+
+  // Format lastMessage as string for consistency with real-time updates
+  groups.forEach(group => {
+    if (group.lastMessage) {
+      if (group.lastMessage.deletedForAll) {
+        group.lastMessage = "This message was deleted";
+      } else {
+        const senderName = group.lastMessage.sender._id.toString() === req.user._id.toString() ? "You" : group.lastMessage.sender.name;
+        let messageText = "";
+        if (group.lastMessage.type === "text") {
+          messageText = group.lastMessage.text;
+        } else if (group.lastMessage.type === "image") {
+          messageText = "📷 Photo";
+        } else if (group.lastMessage.type === "video") {
+          messageText = "🎥 Video";
+        } else if (group.lastMessage.type === "file") {
+          messageText = "📎 File";
+        } else {
+          messageText = "Message";
+        }
+        group.lastMessage = `${senderName}: ${messageText}`;
+      }
+    } 
+    else {
+      group.lastMessage = "No messages yet";
+    }
+  });
 
   res.json(groups);
 };

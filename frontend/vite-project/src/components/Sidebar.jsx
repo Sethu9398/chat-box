@@ -131,6 +131,21 @@ function Sidebar() {
 
     const messageUpdateHandler = (data) => {
       console.log("📩 Sidebar message update received:", data);
+      // Check if it's a group chat first
+      const isGroup = groups.some(g => g._id === data.chatId);
+      if (isGroup) {
+        // Update group lastMessage
+        dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+          const group = draft.find(g => g._id === data.chatId);
+          if (group) {
+            group.lastMessage = data.lastMessageText;
+            group.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
+          }
+        }));
+        return;
+      }
+
+      // Private chat logic
       if (data.scope === "for-me") {
         // Update the specific user's lastMessage in cache and reorder
         dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
@@ -263,9 +278,33 @@ function Sidebar() {
     return users.reduce((total, user) => total + (Number(user.unreadCount) || 0), 0);
   }, [users]);
 
-  const getLastMessage = (msg) => {
+  const getLastMessage = (msg, isGroup = false) => {
     if (!msg) return "No messages yet";
     if (typeof msg === "string") return msg;
+
+    // For group chats, format with sender name
+    if (isGroup) {
+      if (msg.deletedForAll) return "This message was deleted";
+
+      const senderName = msg.sender._id === currentUser._id ? "You" : msg.sender.name;
+      let messageText = "";
+
+      if (msg.type === "text") {
+        messageText = msg.text;
+      } else if (msg.type === "image") {
+        messageText = "📷 Photo";
+      } else if (msg.type === "video") {
+        messageText = "🎥 Video";
+      } else if (msg.type === "file") {
+        messageText = "📎 File";
+      } else {
+        messageText = "Message";
+      }
+
+      return `${senderName}: ${messageText}`;
+    }
+
+    // For private chats (existing logic)
     return "Message";
   };
 
@@ -535,7 +574,7 @@ function Sidebar() {
                   <div className="flex-grow-1" style={{ minWidth: 0 }}>
                     <strong>{g.name}</strong>
                     <div className="text-muted small text-truncate">
-                      {getLastMessage(g.lastMessage)}
+                      {getLastMessage(g.lastMessage, true)}
                     </div>
                   </div>
 

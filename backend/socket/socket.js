@@ -212,9 +212,16 @@ const socketServer = (io, onlineUsers) => {
               });
             }
 
+            // Format lastMessageText with sender name for groups
+            let lastMessageText = populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message");
+            if (groupChat) {
+              const senderName = populated.sender._id.toString() === participant._id.toString() ? "You" : populated.sender.name;
+              lastMessageText = `${senderName}: ${lastMessageText}`;
+            }
+
             io.to(participant._id.toString()).emit("sidebar-message-update", {
               chatId: data.chatId.toString(),
-              lastMessageText: populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message"),
+              lastMessageText,
               lastMessageCreatedAt: populated.createdAt.toISOString(),
               unreadCount,
               scope: "for-everyone"
@@ -225,7 +232,7 @@ const socketServer = (io, onlineUsers) => {
         // Update sidebar for sender
         io.to(data.sender.toString()).emit("sidebar-message-update", {
           chatId: data.chatId.toString(),
-          lastMessageText: populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message"),
+          lastMessageText: groupChat ? `You: ${populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message")}` : (populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message")),
           lastMessageCreatedAt: populated.createdAt.toISOString(),
           scope: "for-me"
         });

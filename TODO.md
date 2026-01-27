@@ -1,9 +1,16 @@
-# Fix Delete for Everyone in Group Chats
+# TODO: Fix Group Chat Sidebar Updates Without Refresh
 
-## Tasks
-- [x] Modify `deleteForEveryone` in `backend/controllers/messageController.js` to use `getChatContext` for chat type detection
-- [x] Update `lastMessage` on correct model (`GroupChat` for groups, `Chat` for private)
-- [x] Use correct participant list (`members` for groups, `participants` for private)
-- [x] Fix `socket.js` `send-message` handler to handle group chats properly
-- [x] Test delete for everyone in group chats (syntax check passed)
-- [x] Verify private chat functionality remains unaffected (logic preserved)
+## Completed Tasks
+- [x] Analyze the issue: Group chat last messages only update on sidebar after website refresh
+- [x] Identify root cause: Inconsistent formatting of lastMessageText for group senders and missing cache updates for groups
+- [x] Fix socket.js: Update lastMessageText for group chat senders to include "You: " prefix
+- [x] Fix Sidebar.jsx: Add lastMessageCreatedAt update for groups in cache
+
+## Summary of Changes
+- Modified `backend/socket/socket.js` to format lastMessageText correctly for group chat senders
+- Updated `frontend/vite-project/src/components/Sidebar.jsx` to include lastMessageCreatedAt in group cache updates
+
+## Testing
+- Test sending messages in group chats and verify sidebar updates immediately without refresh
+- Ensure private chat functionality remains unchanged
+- Check that design and other functionalities are preserved

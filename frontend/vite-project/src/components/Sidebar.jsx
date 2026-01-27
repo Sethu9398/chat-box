@@ -367,6 +367,7 @@ function Sidebar() {
                           const userToSelect = users.find(u => u._id === otherUserId);
                           if (userToSelect) {
                             dispatch(setSelectedUser(userToSelect));
+                            dispatch(setSelectedGroup(null));
                           }
                         }
                         setShowNotifications(false);
@@ -447,7 +448,10 @@ function Sidebar() {
                   key={u._id}
                   className="d-flex align-items-center p-2 border-bottom"
                   style={{ cursor: "pointer" }}
-                  onClick={() => dispatch(setSelectedUser(u))}
+                  onClick={() => {
+                    dispatch(setSelectedUser(u));
+                    dispatch(setSelectedGroup(null));
+                  }}
                 >
                   <img
                     src={u.avatar || defaultprofile}
@@ -515,7 +519,10 @@ function Sidebar() {
                   key={g._id}
                   className="d-flex align-items-center p-2 border-bottom"
                   style={{ cursor: "pointer" }}
-                  onClick={() => dispatch(setSelectedGroup(g))}
+                  onClick={() => {
+                    dispatch(setSelectedGroup(g));
+                    dispatch(setSelectedUser(null));
+                  }}
                 >
                   <img
                     src={g.avatar || defaultprofile}

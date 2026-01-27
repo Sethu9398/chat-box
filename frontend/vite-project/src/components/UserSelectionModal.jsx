@@ -18,6 +18,7 @@ const UserSelectionModal = ({ isOpen, onClose }) => {
     try {
       await getOrCreateChat(user._id).unwrap();
       dispatch(setSelectedUser(user));
+      dispatch(setSelectedGroup(null));
       onClose();
     } catch (error) {
       console.error('Failed to create chat:', error);

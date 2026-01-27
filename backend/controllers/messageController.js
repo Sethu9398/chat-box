@@ -242,6 +242,8 @@ const uploadMessage = async (req, res) => {
     // ✅ CORRECT CLOUDINARY URL
     const mediaUrl = result.secure_url;
 
+    const { type: chatType, data } = await getChatContext(chatId);
+
     const message = await Message.create({
       chatId,
       sender: req.user._id,
@@ -253,9 +255,26 @@ const uploadMessage = async (req, res) => {
       isForwarded: isForwarded || false,
     });
 
-    await Chat.findByIdAndUpdate(chatId, {
-      lastMessage: message._id,
-    });
+    // ✅ GROUP CHAT
+    if (chatType === "group") {
+      await GroupChat.findByIdAndUpdate(chatId, { lastMessage: message._id });
+
+      const populated = await message.populate([
+        { path: "sender", select: "name avatar" },
+        { path: "replyTo" }
+      ]);
+
+      populated.chatId = populated.chatId.toString();
+
+      for (const member of data.members) {
+        req.app.get("io").to(member.toString()).emit("new-message", populated);
+      }
+
+      return res.status(201).json(populated);
+    }
+
+    // ✅ PRIVATE CHAT
+    await Chat.findByIdAndUpdate(chatId, { lastMessage: message._id });
 
     const populated = await message.populate([
       { path: "sender", select: "name avatar" },
@@ -403,20 +422,30 @@ const deleteForEveryone = async (req, res) => {
     // Get the updated message
     const updatedMessage = await Message.findById(req.params.id).populate("sender", "name avatar").populate("replyTo");
 
-    // Recalculate Chat.lastMessage
+    // Get chat context to determine if it's group or private
+    const { type: chatType, data: chatData } = await getChatContext(message.chatId);
+
+    // Recalculate lastMessage based on chat type
     const newLastMessage = await Message.findOne({
       chatId: message.chatId,
       deletedForAll: false
     }).sort({ createdAt: -1 });
-    await Chat.findByIdAndUpdate(message.chatId, {
-      lastMessage: newLastMessage ? newLastMessage._id : null
-    });
 
-    // Get chat participants
-    const chat = await Chat.findById(message.chatId).populate("participants");
+    if (chatType === "group") {
+      await GroupChat.findByIdAndUpdate(message.chatId, {
+        lastMessage: newLastMessage ? newLastMessage._id : null
+      });
+    } else {
+      await Chat.findByIdAndUpdate(message.chatId, {
+        lastMessage: newLastMessage ? newLastMessage._id : null
+      });
+    }
+
+    // Get chat participants/members
+    const participants = chatType === "group" ? chatData.members : chatData.participants;
 
     // Emit sidebar updates to all participants
-    for (const participant of chat.participants) {
+    for (const participant of participants) {
       // Use the same logic as getSidebarUsers: check the most recent message first
       const mostRecentMessage = await Message.findOne({
         chatId: message.chatId

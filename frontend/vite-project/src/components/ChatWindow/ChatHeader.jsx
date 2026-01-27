@@ -23,6 +23,7 @@ const formatLastSeen = (lastSeen) => {
 
 function ChatHeader({
   user,
+  group,
   isMobile,
   onBack,
   onOpenInfo,
@@ -39,9 +40,13 @@ function ChatHeader({
     return () => clearInterval(timer);
   }, []);
 
+  // Determine if this is a group chat
+  const isGroup = !!group;
+  const chatEntity = group || user;
+
   const avatar =
-    typeof user?.avatar === "string" && user.avatar.trim()
-      ? user.avatar
+    typeof chatEntity?.avatar === "string" && chatEntity.avatar.trim()
+      ? chatEntity.avatar
       : DEFAULT_AVATAR;
 
   return (
@@ -87,10 +92,13 @@ function ChatHeader({
 
           <div className="text-truncate">
             <strong className="d-block text-truncate">
-              {user?.name || "User"}
+              {chatEntity?.name || "Chat"}
             </strong>
             <small className="text-muted">
-              {user?.isOnline ? "Online" : formatLastSeen(user?.lastSeen)}
+              {isGroup
+                ? `${group.members?.length || 0} members`
+                : (user?.isOnline ? "Online" : formatLastSeen(user?.lastSeen))
+              }
             </small>
           </div>
         </div>

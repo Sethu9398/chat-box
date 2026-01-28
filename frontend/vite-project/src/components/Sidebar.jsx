@@ -284,7 +284,22 @@ function Sidebar() {
 
   const getLastMessage = (msg, isGroup = false) => {
     if (!msg) return "No messages yet";
-    if (typeof msg === "string") return msg;
+    if (typeof msg === "string") {
+      if (isGroup) {
+        // For real-time updates, msg is a formatted string like "Sender: text"
+        const colonIndex = msg.indexOf(': ');
+        if (colonIndex !== -1) {
+          const sender = msg.substring(0, colonIndex + 2);
+          const text = msg.substring(colonIndex + 2);
+          const truncatedText = text.length > 55 ? text.substring(0, 55) + "…" : text;
+          return sender + truncatedText;
+        } else {
+          return msg.length > 30 ? msg.substring(0, 30) + "…" : msg;
+        }
+      } else {
+        return msg;
+      }
+    }
 
     // For group chats, format with sender name
     if (isGroup) {
@@ -294,7 +309,7 @@ function Sidebar() {
       let messageText = "";
 
       if (msg.type === "text") {
-        messageText = msg.text;
+        messageText = msg.text.length > 30 ? msg.text.substring(0, 30) + "…" : msg.text;
       } else if (msg.type === "image") {
         messageText = "📷 Photo";
       } else if (msg.type === "video") {

@@ -10,7 +10,7 @@ import {
 import ProfileModal from "./ProfileModal";
 import UserSelectionModal from "./UserSelectionModal";
 import GroupCreationModal from "./GroupCreationModal";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { logoutUser } from "../features/auth/authSlice";
@@ -89,6 +89,7 @@ function Sidebar() {
 
   const currentUser = useSelector((state) => state.auth.user);
   const selectedUser = useSelector((state) => state.chat.selectedUser);
+  const selectedGroup = useSelector((state) => state.chat.selectedGroup);
 
   const {
     data: users = [],
@@ -124,78 +125,140 @@ function Sidebar() {
 
   /* REAL-TIME SIDEBAR UPDATES */
   useEffect(() => {
-    const handler = () => {
-      console.log("🔄 Sidebar update received");
-      dispatch(userApi.util.invalidateTags(["User"]));
-    };
-
     const messageUpdateHandler = (data) => {
       console.log("📩 Sidebar message update received:", data);
       // Check if it's a group message
-      if (data.isGroup || groups.some(g => g._id === data.chatId)) {
-        // Update group cache
-        const updated = { value: false };
+      if (data.isGroup || groups.some(g => g._id.toString() === data.chatId.toString())) {
+        // Update group cache with sorting in single operation to avoid race conditions
         dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
-          const group = draft.find(g => g._id === data.chatId);
+          const group = draft.find(g => g._id.toString() === data.chatId.toString());
           if (group) {
             group.lastMessage = data.lastMessageText;
             group.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
-            updated.value = true;
+            group.unreadCount = data.unreadCount || 0;
           }
+          // Sort by lastMessageCreatedAt descending
+          draft.sort((a, b) => {
+            const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+            const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+            return bTime - aTime;
+          });
         }));
-        if (!updated.value) {
-          dispatch(chatApi.util.invalidateTags(["Groups"]));
-        }
         return;
       }
 
       // If not a group, handle private chat
       if (data.scope === "for-me") {
-        // Update the specific user's lastMessage in cache and reorder
-        dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
-          const chatUser = draft.find(u => u.chatId === data.chatId);
-          if (chatUser) {
-            chatUser.lastMessage = data.lastMessageText;
-            chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString(); // Use provided or set to now
-          }
-          // Sort by lastMessageCreatedAt descending
-          draft.sort((a, b) => {
-            const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
-            const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
-            return bTime - aTime;
-          });
-        }));
+        // Check if it's a group message
+        if (data.isGroup) {
+          // Update group cache for sender with sorting in single operation
+          dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+            const group = draft.find(g => g._id.toString() === data.chatId.toString());
+            if (group) {
+              group.lastMessage = data.lastMessageText;
+              group.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
+              group.unreadCount = data.unreadCount || 0;
+            }
+            // Sort by lastMessageCreatedAt descending
+            draft.sort((a, b) => {
+              const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+              const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+              return bTime - aTime;
+            });
+          }));
+        } else {
+          // Update private chat cache for sender
+          dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+            const chatUser = draft.find(u => u.chatId === data.chatId);
+            if (chatUser) {
+              chatUser.lastMessage = data.lastMessageText;
+              chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString(); // Use provided or set to now
+              chatUser.unreadCount = data.unreadCount || 0;
+            }
+            // Sort by lastMessageCreatedAt descending
+            draft.sort((a, b) => {
+              const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+              const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+              return bTime - aTime;
+            });
+          }));
+        }
       }
       else if (data.scope === "read-update") {
-        // Update unread count to 0 for this chat
-        dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
-          const chatUser = draft.find(u => u.chatId === data.chatId);
-          if (chatUser) {
-            chatUser.unreadCount = 0;
-          }
-        }));
+        // Update unread count to 0 and preserve/update lastMessage for this chat (both private and group)
+        // Check if it's a group
+        if (data.isGroup || groups.some(g => g._id.toString() === data.chatId.toString())) {
+          dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+            const group = draft.find(g => g._id.toString() === data.chatId.toString());
+            if (group) {
+              group.unreadCount = 0;
+              // Update lastMessage and lastMessageCreatedAt if provided
+              if (data.lastMessageText) {
+                group.lastMessage = data.lastMessageText;
+                group.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
+              }
+            }
+          }));
+        } else {
+          // Private chat
+          dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+            const chatUser = draft.find(u => u.chatId === data.chatId);
+            if (chatUser) {
+              chatUser.unreadCount = 0;
+              // Update lastMessage and lastMessageCreatedAt if provided
+              if (data.lastMessageText) {
+                chatUser.lastMessage = data.lastMessageText;
+                chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
+              }
+            }
+          }));
+        }
       }
       else if (data.scope === "for-everyone") {
-        // Directly update unreadCount in cache for real-time update
-        dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
-          const chatUser = draft.find(u => u.chatId === data.chatId);
-          if (chatUser) {
-            chatUser.unreadCount = data.unreadCount || 0;
-            chatUser.lastMessage = data.lastMessageText;
-            chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
-          }
-          // Sort by lastMessageCreatedAt descending
-          draft.sort((a, b) => {
-            const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
-            const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
-            return bTime - aTime;
-          });
-        }));
+        // Check if it's a group
+        if (data.isGroup || groups.some(g => g._id.toString() === data.chatId.toString())) {
+          // Update group cache with sorting in single operation
+          dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+            const group = draft.find(g => g._id.toString() === data.chatId.toString());
+            if (group) {
+              group.unreadCount = data.unreadCount || 0;
+              group.lastMessage = data.lastMessageText;
+              group.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
+            }
+            // Sort by lastMessageCreatedAt descending
+            draft.sort((a, b) => {
+              const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+              const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+              return bTime - aTime;
+            });
+          }));
+        } else {
+          // Directly update unreadCount in cache for real-time update (private chat)
+          dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+            const chatUser = draft.find(u => u.chatId === data.chatId);
+            if (chatUser) {
+              chatUser.unreadCount = data.unreadCount || 0;
+              chatUser.lastMessage = data.lastMessageText;
+              chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
+            }
+            // Sort by lastMessageCreatedAt descending
+            draft.sort((a, b) => {
+              const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+              const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+              return bTime - aTime;
+            });
+          }));
+        }
       }
       else {
         // Fallback: invalidate to refetch
         dispatch(userApi.util.invalidateTags(["User"]));
       }
+    };
+
+    const handler = () => {
+      console.log("🔄 Sidebar update received");
+      dispatch(userApi.util.invalidateTags(["User"]));
     };
 
     const newMessageHandler = (message) => {
@@ -598,9 +661,26 @@ function Sidebar() {
                   </div>
 
                   <div className="text-end ms-2" style={{ minWidth: 65 }}>
-                    <small className="text-muted">
-                      {g.members.length} members
-                    </small>
+                    <div>
+                      <small className="text-muted">
+                        {g.members.length} members
+                      </small>
+                    </div>
+                    {Number(g.unreadCount) > 0 && selectedGroup?._id !== g._id && (
+                      <span
+                        className="badge bg-success rounded-circle mt-1"
+                        style={{
+                          width: '20px',
+                          height: '20px',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '10px',
+                          padding: '5px',
+                        }}
+                      >
+                        {g.unreadCount}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))

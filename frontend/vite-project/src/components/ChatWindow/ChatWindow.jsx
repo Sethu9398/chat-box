@@ -40,6 +40,13 @@ function ChatWindow({ user, group, isMobile, onBack }) {
       markAsRead(chatId);
       setPreviousChatId(chatId);
     }
+
+    // ✅ CLEANUP: Leave chat room when component unmounts or chatId changes
+    return () => {
+      if (chatId) {
+        socket.emit("leave-chat", chatId);
+      }
+    };
   }, [chatId, markAsRead, previousChatId]);
 
   // ✅ REJOIN ON RECONNECT

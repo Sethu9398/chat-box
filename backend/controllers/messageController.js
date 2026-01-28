@@ -99,10 +99,39 @@ const getMessages = async (req, res) => {
       { status: "read" }
     );
 
+    // Get last message for sidebar update
+    const lastMessage = await Message.findOne({
+      chatId,
+      deletedForAll: false,
+      deletedBy: { $ne: req.user._id }
+    }).sort({ createdAt: -1 }).populate("sender", "name");
+
+    let lastMessageText = "No messages yet";
+    let lastMessageCreatedAt = null;
+
+    if (lastMessage) {
+      lastMessageCreatedAt = lastMessage.createdAt.toISOString();
+      const senderName = lastMessage.sender._id.toString() === req.user._id.toString() ? "You" : lastMessage.sender.name;
+      if (lastMessage.type === "text") {
+        lastMessageText = `${senderName}: ${lastMessage.text}`;
+      } else if (lastMessage.type === "image") {
+        lastMessageText = `${senderName}: 📷 Photo`;
+      } else if (lastMessage.type === "video") {
+        lastMessageText = `${senderName}: 🎥 Video`;
+      } else if (lastMessage.type === "file") {
+        lastMessageText = `${senderName}: 📎 File`;
+      } else {
+        lastMessageText = `${senderName}: Message`;
+      }
+    }
+
     req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
       chatId: chatId.toString(),
+      lastMessageText,
+      lastMessageCreatedAt,
       unreadCount: 0,
-      scope: "read-update"
+      scope: "read-update",
+      isGroup: true
     });
 
     return res.json(messages);
@@ -135,8 +164,35 @@ const getMessages = async (req, res) => {
     { status: "read" }
   );
 
+  // Get last message for sidebar update
+  const lastMessagePrivate = await Message.findOne({
+    chatId,
+    deletedForAll: false,
+    deletedBy: { $ne: req.user._id }
+  }).sort({ createdAt: -1 });
+
+  let lastMessageText = "No messages yet";
+  let lastMessageCreatedAt = null;
+
+  if (lastMessagePrivate) {
+    lastMessageCreatedAt = lastMessagePrivate.createdAt.toISOString();
+    if (lastMessagePrivate.type === "text") {
+      lastMessageText = lastMessagePrivate.text;
+    } else if (lastMessagePrivate.type === "image") {
+      lastMessageText = "📷 Photo";
+    } else if (lastMessagePrivate.type === "video") {
+      lastMessageText = "🎥 Video";
+    } else if (lastMessagePrivate.type === "file") {
+      lastMessageText = "📎 File";
+    } else {
+      lastMessageText = "Message";
+    }
+  }
+
   req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
     chatId: chatId.toString(),
+    lastMessageText,
+    lastMessageCreatedAt,
     unreadCount: 0,
     scope: "read-update"
   });

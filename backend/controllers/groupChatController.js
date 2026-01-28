@@ -63,6 +63,8 @@ const createGroup = async (req, res) => {
 
 /* GET MY GROUPS */
 const getMyGroups = async (req, res) => {
+  const GroupMessage = require("../models/Message"); // For unread count
+  
   const groups = await GroupChat.find({
     members: req.user._id,
   })
@@ -75,9 +77,13 @@ const getMyGroups = async (req, res) => {
     })
     .populate("members", "name avatar isOnline");
 
-  // Format lastMessage as string for consistency with real-time updates
-  groups.forEach(group => {
+  // Format lastMessage as string for consistency with real-time updates and add unread count
+  const formattedGroups = await Promise.all(groups.map(async (group) => {
+    let lastMessageCreatedAt = null;
+
     if (group.lastMessage) {
+      lastMessageCreatedAt = group.lastMessage.createdAt;
+
       if (group.lastMessage.deletedForAll) {
         group.lastMessage = "This message was deleted";
       } else {
@@ -100,9 +106,32 @@ const getMyGroups = async (req, res) => {
     else {
       group.lastMessage = "No messages yet";
     }
+
+    // Calculate unread count for this group
+    const unreadCount = await GroupMessage.countDocuments({
+      chatId: group._id,
+      sender: { $ne: req.user._id },
+      status: { $ne: "read" },
+      deletedBy: { $ne: req.user._id },
+      deletedForAll: false
+    });
+
+    // Convert to plain object and add unreadCount and lastMessageCreatedAt
+    const groupObj = group.toObject();
+    groupObj.unreadCount = unreadCount;
+    groupObj.lastMessageCreatedAt = lastMessageCreatedAt ? lastMessageCreatedAt.toISOString() : null;
+
+    return groupObj;
+  }));
+
+  // Sort by lastMessageCreatedAt descending (most recent first)
+  formattedGroups.sort((a, b) => {
+    const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+    const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+    return bTime - aTime;
   });
 
-  res.json(groups);
+  res.json(formattedGroups);
 };
 
 module.exports = { createGroup, getMyGroups };

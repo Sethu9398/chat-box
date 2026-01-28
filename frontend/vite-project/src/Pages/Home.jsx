@@ -3,7 +3,8 @@ import ChatWindow from "../components/ChatWindow/ChatWindow";
 import { useSelector, useDispatch } from "react-redux";
 import { useEffect, useState } from "react";
 import { setSelectedUser, setSelectedGroup } from "../features/chat/chatSlice";
-import { useGetOrCreateChatMutation } from "../features/chat/chatApi";
+import { useGetOrCreateChatMutation, chatApi } from "../features/chat/chatApi";
+import { userApi } from "../features/users/userApi";
 import socket from "../socketClient";
 
 function Home() {
@@ -67,18 +68,17 @@ function Home() {
       }}
     >
       {/* SIDEBAR */}
-      {(!isMobile || (!selectedUser && !selectedGroup)) && (
-        <div
-          style={{
-            width: isMobile ? "100%" : 320,
-            height: "100vh",
-            borderRight: "1px solid #ddd",
-            flexShrink: 0,
-          }}
-        >
-          <Sidebar />
-        </div>
-      )}
+      <div
+        style={{
+          width: isMobile && (selectedUser || selectedGroup) ? 0 : (isMobile ? "100%" : 320),
+          height: "100vh",
+          borderRight: "1px solid #ddd",
+          flexShrink: 0,
+          visibility: isMobile && (selectedUser || selectedGroup) ? "hidden" : "visible",
+        }}
+      >
+        <Sidebar />
+      </div>
 
       {/* CHAT */}
       {(!isMobile || selectedUser || selectedGroup) && (

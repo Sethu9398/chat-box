@@ -4,6 +4,7 @@ import { FaSmile, FaPaperclip } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 import { useSendMessageMutation } from "../../features/messages/messageApi";
 import { chatApi } from "../../features/chat/chatApi";
+import { userApi } from "../../features/users/userApi";
 import socket from "../../socketClient";
 
 function ChatInput({ chatId, isGroup, onOpenAttachment, replyTo, onCancelReply }) {
@@ -59,7 +60,7 @@ function ChatInput({ chatId, isGroup, onOpenAttachment, replyTo, onCancelReply }
       isForwarded: false,
     });
 
-    // Update sidebar cache for group chats
+    // Update sidebar cache immediately for instant UI feedback
     if (isGroup) {
       dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
         const group = draft.find(g => g._id === chatId);
@@ -67,6 +68,21 @@ function ChatInput({ chatId, isGroup, onOpenAttachment, replyTo, onCancelReply }
           group.lastMessage = `You: ${messageText}`;
           group.lastMessageCreatedAt = new Date().toISOString();
         }
+      }));
+    } else {
+      // Update sidebar cache for private chats
+      dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+        const chatUser = draft.find(u => u.chatId === chatId);
+        if (chatUser) {
+          chatUser.lastMessage = messageText;
+          chatUser.lastMessageCreatedAt = new Date().toISOString();
+        }
+        // Sort by lastMessageCreatedAt descending
+        draft.sort((a, b) => {
+          const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+          const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+          return bTime - aTime;
+        });
       }));
     }
   };

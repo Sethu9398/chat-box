@@ -66,6 +66,7 @@ const socketServer = (io, onlineUsers) => {
 
         for (const msg of sentMessages) {
           const chat = msg.chatId;
+          if (!chat || !chat.participants) continue;
           const otherParticipants = chat.participants.filter(p => p.toString() !== userId);
           const anyOnline = otherParticipants.some(p => onlineUsers.has(p.toString()));
           if (anyOnline) {
@@ -234,7 +235,9 @@ const socketServer = (io, onlineUsers) => {
           chatId: data.chatId.toString(),
           lastMessageText: groupChat ? `You: ${populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message")}` : (populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message")),
           lastMessageCreatedAt: populated.createdAt.toISOString(),
-          scope: "for-me"
+          unreadCount: 0,
+          scope: "for-me",
+          isGroup: !!groupChat
         });
       } catch (err) {
         console.error("❌ SOCKET MESSAGE ERROR:", err);

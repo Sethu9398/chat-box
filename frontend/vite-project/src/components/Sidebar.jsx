@@ -131,21 +131,25 @@ function Sidebar() {
 
     const messageUpdateHandler = (data) => {
       console.log("📩 Sidebar message update received:", data);
-      // Check if it's a group chat first
-      const isGroup = groups.some(g => g._id === data.chatId);
-      if (isGroup) {
-        // Update group lastMessage
+      // Check if it's a group message
+      if (data.isGroup || groups.some(g => g._id === data.chatId)) {
+        // Update group cache
+        const updated = { value: false };
         dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
           const group = draft.find(g => g._id === data.chatId);
           if (group) {
             group.lastMessage = data.lastMessageText;
             group.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
+            updated.value = true;
           }
         }));
+        if (!updated.value) {
+          dispatch(chatApi.util.invalidateTags(["Groups"]));
+        }
         return;
       }
 
-      // Private chat logic
+      // If not a group, handle private chat
       if (data.scope === "for-me") {
         // Update the specific user's lastMessage in cache and reorder
         dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
@@ -250,7 +254,7 @@ function Sidebar() {
       socket.off("group-created", groupCreatedHandler);
       socket.off("connect", connectHandler);
     };
-  }, [dispatch, refetch, currentUser?._id]);
+  }, [dispatch, refetch, currentUser?._id, groups]);
 
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";

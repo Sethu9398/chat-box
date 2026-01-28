@@ -1,17 +1,19 @@
 import { useState, useRef, useEffect } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { FaSmile, FaPaperclip } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 import { useSendMessageMutation } from "../../features/messages/messageApi";
+import { chatApi } from "../../features/chat/chatApi";
 import socket from "../../socketClient";
 
-function ChatInput({ chatId, onOpenAttachment, replyTo, onCancelReply }) {
+function ChatInput({ chatId, isGroup, onOpenAttachment, replyTo, onCancelReply }) {
   const [msg, setMsg] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const inputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
   const me = useSelector((state) => state.auth.user);
+  const dispatch = useDispatch();
   const [sendMessageMutation] = useSendMessageMutation();
 
   const emitStopTyping = () => {
@@ -56,6 +58,17 @@ function ChatInput({ chatId, onOpenAttachment, replyTo, onCancelReply }) {
       replyTo: replyTo?._id,
       isForwarded: false,
     });
+
+    // Update sidebar cache for group chats
+    if (isGroup) {
+      dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+        const group = draft.find(g => g._id === chatId);
+        if (group) {
+          group.lastMessage = `You: ${messageText}`;
+          group.lastMessageCreatedAt = new Date().toISOString();
+        }
+      }));
+    }
   };
 
   return (

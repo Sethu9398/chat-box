@@ -1,14 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { useUploadMessageMutation } from "../../features/messages/messageApi";
+import { chatApi } from "../../features/chat/chatApi";
 import socket from "../../socketClient";
 
-function AttachmentComposer({ chatId, replyTo, onClose }) {
+function AttachmentComposer({ chatId, isGroup, replyTo, onClose }) {
   const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
 
   const me = useSelector((state) => state.auth.user);
+  const dispatch = useDispatch();
   const [uploadMessage, { isLoading }] = useUploadMessageMutation();
 
   const handleFileSelect = (e) => {
@@ -49,6 +51,19 @@ function AttachmentComposer({ chatId, replyTo, onClose }) {
       await uploadMessage(formData).unwrap();
       // Stop typing when sending file
       socket.emit("stop-typing", { chatId, userId: me._id });
+
+      // Update sidebar cache for group chats
+      if (isGroup) {
+        const mediaText = type === "image" ? "📷 Photo" : type === "video" ? "🎥 Video" : "📎 File";
+        dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+          const group = draft.find(g => g._id === chatId);
+          if (group) {
+            group.lastMessage = `You: ${mediaText}`;
+            group.lastMessageCreatedAt = new Date().toISOString();
+          }
+        }));
+      }
+
       // Clear inputs after successful send
       setFile(null);
       setPreview(null);

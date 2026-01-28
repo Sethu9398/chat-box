@@ -181,6 +181,35 @@ const sendMessage = async (req, res) => {
         req.app.get("io").to(member.toString()).emit("new-message", populated);
       }
 
+      // Emit sidebar updates for group chat
+      for (const member of data.members) {
+        let lastMessageText;
+        if (member.toString() === req.user._id.toString()) {
+          // For sender
+          const msgType = populated.type === "text" ? populated.text :
+                         populated.type === "image" ? "📷 Photo" :
+                         populated.type === "video" ? "🎥 Video" :
+                         populated.type === "file" ? "📎 File" : "Message";
+          lastMessageText = `You: ${msgType}`;
+        } else {
+          // For other members
+          const senderName = populated.sender.name;
+          const msgType = populated.type === "text" ? populated.text :
+                         populated.type === "image" ? "📷 Photo" :
+                         populated.type === "video" ? "🎥 Video" :
+                         populated.type === "file" ? "📎 File" : "Message";
+          lastMessageText = `${senderName}: ${msgType}`;
+        }
+
+        req.app.get("io").to(member.toString()).emit("sidebar-message-update", {
+          chatId: chatId.toString(),
+          lastMessageText,
+          lastMessageCreatedAt: populated.createdAt.toISOString(),
+          unreadCount: member.toString() === req.user._id.toString() ? 0 : 0, // For now, set to 0; can be calculated later
+          scope: member.toString() === req.user._id.toString() ? "for-me" : "for-everyone"
+        });
+      }
+
       return res.status(201).json(populated);
     }
 
@@ -268,6 +297,35 @@ const uploadMessage = async (req, res) => {
 
       for (const member of data.members) {
         req.app.get("io").to(member.toString()).emit("new-message", populated);
+      }
+
+      // Emit sidebar updates for group chat
+      for (const member of data.members) {
+        let lastMessageText;
+        if (member.toString() === req.user._id.toString()) {
+          // For sender
+          const msgType = populated.type === "text" ? populated.text :
+                         populated.type === "image" ? "📷 Photo" :
+                         populated.type === "video" ? "🎥 Video" :
+                         populated.type === "file" ? "📎 File" : "Message";
+          lastMessageText = `You: ${msgType}`;
+        } else {
+          // For other members
+          const senderName = populated.sender.name;
+          const msgType = populated.type === "text" ? populated.text :
+                         populated.type === "image" ? "📷 Photo" :
+                         populated.type === "video" ? "🎥 Video" :
+                         populated.type === "file" ? "📎 File" : "Message";
+          lastMessageText = `${senderName}: ${msgType}`;
+        }
+
+        req.app.get("io").to(member.toString()).emit("sidebar-message-update", {
+          chatId: chatId.toString(),
+          lastMessageText,
+          lastMessageCreatedAt: populated.createdAt.toISOString(),
+          unreadCount: member.toString() === req.user._id.toString() ? 0 : 0, // For now, set to 0; can be calculated later
+          scope: member.toString() === req.user._id.toString() ? "for-me" : "for-everyone"
+        });
       }
 
       return res.status(201).json(populated);

@@ -135,6 +135,7 @@ function ChatWindow({ user, group, isMobile, onBack }) {
       <div className="position-sticky bottom-0 bg-white border-top">
         <ChatInput
           chatId={chatId}
+          isGroup={!!group}
           onOpenAttachment={() => setShowAttachment(true)}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
@@ -144,6 +145,7 @@ function ChatWindow({ user, group, isMobile, onBack }) {
       {showAttachment && (
         <AttachmentComposer
           chatId={chatId}
+          isGroup={!!group}
           replyTo={replyTo}
           onClose={() => setShowAttachment(false)}
         />

@@ -2,14 +2,23 @@ const Message = require("../models/Message");
 const Chat = require("../models/Chat");
 const GroupChat = require("../models/GroupChat");
 const User = require("../models/User");
+const { updateGroupMessageStatuses } = require("../controllers/messageController");
 
 const socketServer = (io, onlineUsers) => {
+  // Initialize viewingUsers map if not exists
+  if (!io.viewingUsers) {
+    io.viewingUsers = new Map();
+  }
+
   io.on("connection", (socket) => {
     console.log("🔌 Socket connected:", socket.id);
 
     /* USER ONLINE */
     socket.on("user-online", async (userId) => {
       try {
+        // Store userId on socket for later use
+        socket.userId = userId;
+
         // Update user status in DB
         await User.findByIdAndUpdate(userId, {
           isOnline: true,
@@ -22,7 +31,7 @@ const socketServer = (io, onlineUsers) => {
         // Emit individual status update
         io.emit("user-status-update", { userId, isOnline: true, lastSeen: null });
 
-        // Mark pending messages as delivered
+        // Mark pending messages as delivered for private chats
         const chats = await Chat.find({ participants: userId });
         for (const chat of chats) {
           const pendingMessages = await Message.find({
@@ -54,6 +63,13 @@ const socketServer = (io, onlineUsers) => {
               });
             }
           }
+        }
+
+        // Handle group chats - update statuses when user comes online
+        const groupChats = await GroupChat.find({ members: userId });
+        for (const groupChat of groupChats) {
+          // Recalculate all message statuses for this group
+          await updateGroupMessageStatuses(groupChat._id, io, onlineUsers);
         }
 
         // Also check for messages sent by this user that can be marked as delivered
@@ -107,19 +123,70 @@ const socketServer = (io, onlineUsers) => {
           lastSeen: new Date()
         });
         io.emit("online-users", Array.from(onlineUsers.keys()));
+        
+        // Recalculate group message statuses when user goes offline
+        const groupChats = await GroupChat.find({ members: userId });
+        for (const groupChat of groupChats) {
+          await updateGroupMessageStatuses(groupChat._id, io, onlineUsers);
+        }
       } catch (err) {
         console.error("❌ USER OFFLINE UPDATE ERROR:", err);
       }
     });
 
     /* JOIN CHAT */
-    socket.on("join-chat", (chatId) => {
+    socket.on("join-chat", async (chatId) => {
       socket.join(chatId);
+
+      // Check if this is a group chat and update message statuses
+      const groupChat = await GroupChat.findById(chatId);
+      if (groupChat) {
+        // User is now viewing the group chat
+        // Mark messages from OTHER SENDERS as read
+        await Message.updateMany(
+          {
+            chatId,
+            sender: { $ne: socket.userId },
+            status: { $ne: "read" },
+            deletedBy: { $ne: socket.userId },
+            deletedForAll: false
+          },
+          { status: "read" }
+        );
+
+        // Emit status updates to senders of messages marked as read
+        const updatedMessages = await Message.find({
+          chatId,
+          sender: { $ne: socket.userId },
+          status: "read",
+          deletedBy: { $ne: socket.userId },
+          deletedForAll: false
+        }).select("_id sender").distinct("sender");
+
+        for (const senderId of updatedMessages) {
+          io.to(senderId.toString()).emit("status-update", {
+            messageId: null, // Batch update - sender will fetch latest
+            chatId: chatId.toString(),
+            status: "read"
+          });
+        }
+
+        // Update statuses for ALL messages in the group based on current state
+        await updateGroupMessageStatuses(chatId, io, onlineUsers);
+      }
     });
 
     /* LEAVE CHAT */
-    socket.on("leave-chat", (chatId) => {
+    socket.on("leave-chat", async (chatId) => {
       socket.leave(chatId);
+
+      // Check if this is a group chat and update message statuses
+      const groupChat = await GroupChat.findById(chatId);
+      if (groupChat) {
+        // User left the chat, update statuses for all messages in the group
+        // Some messages may no longer be "read" if no one is viewing
+        await updateGroupMessageStatuses(chatId, io, onlineUsers);
+      }
     });
 
     /* TYPING INDICATOR */
@@ -170,6 +237,29 @@ const socketServer = (io, onlineUsers) => {
         } else {
           const chatDoc = await Chat.findById(data.chatId).populate("participants");
           participants = chatDoc.participants;
+        }
+
+        // For GROUP CHATS: Calculate and set initial status
+        if (groupChat) {
+          const { calculateGroupMessageStatus } = require("../controllers/messageController");
+          const initialStatus = await calculateGroupMessageStatus(
+            message._id.toString(),
+            data.chatId,
+            data.sender.toString(),
+            io,
+            onlineUsers
+          );
+          
+          if (initialStatus !== "sent") {
+            await Message.findByIdAndUpdate(message._id, { status: initialStatus });
+            populated.status = initialStatus;
+            
+            // Emit status update to sender
+            io.to(data.sender.toString()).emit("status-update", {
+              messageId: message._id.toString(),
+              status: initialStatus
+            });
+          }
         }
 
         // Mark message as delivered if receiver is online (only for private chats)
@@ -261,6 +351,12 @@ const socketServer = (io, onlineUsers) => {
               isOnline: false,
               lastSeen: updatedUser.lastSeen.toISOString()
             });
+            
+            // Recalculate group message statuses when user disconnects
+            const groupChats = await GroupChat.find({ members: userId });
+            for (const groupChat of groupChats) {
+              await updateGroupMessageStatuses(groupChat._id, io, onlineUsers);
+            }
           } catch (err) {
             console.error("❌ USER OFFLINE UPDATE ERROR:", err);
           }

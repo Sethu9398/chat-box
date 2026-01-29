@@ -5,6 +5,7 @@ import ChatHeader from "./ChatHeader";
 import ChatMessages from "./ChatMessages";
 import ChatInput from "./ChatInput";
 import ChatInfoDrawer from "./ChatIfoDrawer";
+import GroupInfoModal from "./GroupInfoModal";
 import AttachmentComposer from "./AttachmentComposer";
 import socket from "../../socketClient";
 import { useMarkAsReadMutation, useDeleteForMeMutation, useDeleteForEveryoneMutation } from "../../features/messages/messageApi";
@@ -158,9 +159,15 @@ function ChatWindow({ user, group, isMobile, onBack }) {
         />
       )}
 
-      {showInfo && (
+      {showInfo && user && (
         <ChatInfoDrawer
           user={user}
+          onClose={() => setShowInfo(false)}
+        />
+      )}
+
+      {showInfo && group && (
+        <GroupInfoModal
           group={group}
           onClose={() => setShowInfo(false)}
         />

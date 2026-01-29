@@ -47,6 +47,55 @@ function Home() {
     return () => socket.off("user-status-update", handler);
   }, [selectedUser, dispatch]);
 
+  /* GROUP UPDATE LISTENER */
+  useEffect(() => {
+    const handleGroupUpdated = (updatedGroup) => {
+      if (selectedGroup && selectedGroup._id === updatedGroup._id) {
+        dispatch(setSelectedGroup(updatedGroup));
+      }
+    };
+
+    const handleMembersAdded = (data) => {
+      if (selectedGroup && selectedGroup._id === data.groupId) {
+        dispatch(setSelectedGroup(data.group));
+      }
+    };
+
+    const handleMemberRemoved = (data) => {
+      if (selectedGroup && selectedGroup._id === data.groupId) {
+        dispatch(setSelectedGroup(data.group));
+      }
+    };
+
+    const handleGroupDeleted = (data) => {
+      // Close the group chat if currently viewing it
+      if (selectedGroup && selectedGroup._id === data.groupId) {
+        dispatch(setSelectedGroup(null));
+      }
+      // Invalidate the groups cache to refresh sidebar
+      dispatch(chatApi.util.invalidateTags(['Groups']));
+    };
+
+    const handleMemberLeft = (data) => {
+      // Invalidate groups cache to refresh sidebar
+      dispatch(chatApi.util.invalidateTags(['Groups']));
+    };
+
+    socket.on("group-updated", handleGroupUpdated);
+    socket.on("members-added", handleMembersAdded);
+    socket.on("member-removed", handleMemberRemoved);
+    socket.on("group-deleted", handleGroupDeleted);
+    socket.on("member-left", handleMemberLeft);
+
+    return () => {
+      socket.off("group-updated", handleGroupUpdated);
+      socket.off("members-added", handleMembersAdded);
+      socket.off("member-removed", handleMemberRemoved);
+      socket.off("group-deleted", handleGroupDeleted);
+      socket.off("member-left", handleMemberLeft);
+    };
+  }, [selectedGroup, dispatch]);
+
   /* CREATE CHAT */
   useEffect(() => {
     if (selectedUser && !selectedUser.chatId) {

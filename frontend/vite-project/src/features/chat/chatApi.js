@@ -37,6 +37,52 @@ export const chatApi = createApi({
       query: () => "/groups",
       providesTags: ["Groups"],
     }),
+    leaveGroup: builder.mutation({
+      query: (groupId) => ({
+        url: `/groups/${groupId}/leave`,
+        method: "POST",
+      }),
+      invalidatesTags: ["Groups"],
+    }),
+    deleteGroup: builder.mutation({
+      query: (groupId) => ({
+        url: `/groups/${groupId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Groups"],
+    }),
+    updateGroup: builder.mutation({
+      query: ({ groupId, name, avatar }) => {
+        const formData = new FormData();
+        if (name) {
+          formData.append("name", name);
+        }
+        if (avatar instanceof File) {
+          formData.append("avatar", avatar);
+        }
+        return {
+          url: `/groups/${groupId}`,
+          method: "PUT",
+          body: formData,
+        };
+      },
+      invalidatesTags: ["Groups"],
+    }),
+    addMembers: builder.mutation({
+      query: ({ groupId, memberIds }) => ({
+        url: `/groups/${groupId}/members/add`,
+        method: "POST",
+        body: { memberIds },
+      }),
+      invalidatesTags: ["Groups"],
+    }),
+    removeMember: builder.mutation({
+      query: ({ groupId, memberId }) => ({
+        url: `/groups/${groupId}/members/${memberId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Groups"],
+    }),
   }),
 });
 
@@ -45,4 +91,9 @@ export const {
   useGetOrCreateChatMutation,
   useCreateGroupMutation,
   useGetMyGroupsQuery,
+  useLeaveGroupMutation,
+  useDeleteGroupMutation,
+  useUpdateGroupMutation,
+  useAddMembersMutation,
+  useRemoveMemberMutation,
 } = chatApi;

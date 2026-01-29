@@ -186,6 +186,7 @@ function Sidebar() {
       }
       else if (data.scope === "read-update") {
         // Update unread count to 0 and preserve/update lastMessage for this chat (both private and group)
+        // Don't sort on read-update to avoid reordering when user is viewing a group
         // Check if it's a group
         if (data.isGroup || groups.some(g => g._id.toString() === data.chatId.toString())) {
           dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {

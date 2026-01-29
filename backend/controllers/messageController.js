@@ -68,6 +68,79 @@ const getOrCreateChat = async (req, res) => {
 };
 
 /* =========================
+   HELPER: CALCULATE GROUP MESSAGE STATUS
+========================= */
+const calculateGroupMessageStatus = async (messageId, chatId, senderId, io, onlineUsers) => {
+  try {
+    const group = await GroupChat.findById(chatId).populate("members", "_id");
+    if (!group) return "sent";
+
+    const members = group.members.filter(m => m._id.toString() !== senderId);
+    if (members.length === 0) return "sent";
+
+    // Check if any member is viewing the chat (has opened the group chat)
+    // io.sockets.adapter.rooms.get(chatId) returns a Set of socket IDs in that room
+    const viewingRoom = io.sockets.adapter.rooms.get(chatId.toString());
+    const viewingMembers = members.filter(m => {
+      const socketId = onlineUsers.get(m._id.toString());
+      return socketId && viewingRoom && viewingRoom.has(socketId);
+    });
+
+    if (viewingMembers.length > 0) {
+      return "read";
+    }
+
+    // Check if any member is online (but not viewing the chat)
+    const onlineMembers = members.filter(m => onlineUsers.has(m._id.toString()));
+
+    if (onlineMembers.length > 0) {
+      return "delivered";
+    }
+
+    return "sent";
+  } catch (err) {
+    console.error("Error calculating group message status:", err);
+    return "sent";
+  }
+};
+
+/* =========================
+   HELPER: UPDATE GROUP MESSAGE STATUSES
+========================= */
+const updateGroupMessageStatuses = async (chatId, io, onlineUsers) => {
+  try {
+    // Only check messages that are not already read
+    const messages = await Message.find({
+      chatId,
+      status: { $ne: "read" }
+    }).populate("sender", "_id");
+
+    for (const message of messages) {
+      const newStatus = await calculateGroupMessageStatus(
+        message._id.toString(),
+        chatId,
+        message.sender._id.toString(),
+        io,
+        onlineUsers
+      );
+      
+      if (newStatus !== message.status) {
+        // Update database
+        await Message.findByIdAndUpdate(message._id, { status: newStatus });
+        
+        // Emit status update to sender
+        io.to(message.sender._id.toString()).emit("status-update", {
+          messageId: message._id.toString(),
+          status: newStatus
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Error updating group message statuses:", err);
+  }
+};
+
+/* =========================
    GET MESSAGES
 ========================= */
 const getMessages = async (req, res) => {
@@ -87,8 +160,9 @@ const getMessages = async (req, res) => {
     .populate("replyTo")
     .sort({ createdAt: 1 });
 
-  // ✅ GROUP CHAT
+  // ✅ GROUP CHAT - Mark as read only for the current user viewing
   if (type === "group") {
+    // Mark messages as read for the current user (they are viewing the chat)
     await Message.updateMany(
       {
         chatId,
@@ -98,6 +172,11 @@ const getMessages = async (req, res) => {
       },
       { status: "read" }
     );
+
+    // Update statuses for all messages in the group based on current state
+    const io = req.app.get("io");
+    const onlineUsers = req.app.get("onlineUsers");
+    await updateGroupMessageStatuses(chatId, io, onlineUsers);
 
     // Get last message for sidebar update
     const lastMessage = await Message.findOne({
@@ -758,4 +837,6 @@ module.exports = {
   markAsRead,
   markAsDelivered,
   getRecentMessages,
+  calculateGroupMessageStatus,
+  updateGroupMessageStatuses,
 };

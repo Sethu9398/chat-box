@@ -98,10 +98,12 @@ const getMyGroups = async (req, res) => {
           messageText = "🎥 Video";
         } else if (group.lastMessage.type === "file") {
           messageText = "📎 File";
+        } else if (group.lastMessage.type === "system") {
+          messageText = group.lastMessage.text;
         } else {
           messageText = "Message";
         }
-        group.lastMessage = `${senderName}: ${messageText}`;
+        group.lastMessage = group.lastMessage.type === "system" ? messageText : `${senderName}: ${messageText}`;
       }
     } 
     else {
@@ -165,6 +167,25 @@ const leaveGroup = async (req, res) => {
       .populate("members", "name avatar isOnline")
       .populate("admins", "name avatar");
 
+    // Create system message for leaving member
+    const Message = require("../models/Message");
+    const User = require("../models/User");
+
+    // Get leaving user name
+    const leavingUser = await User.findById(userId).select("name");
+
+    const systemText = `${leavingUser.name} left the group`;
+
+    const systemMessage = await Message.create({
+      chatId: groupId,
+      sender: userId, // The user who left
+      type: "system",
+      text: systemText,
+    });
+
+    // Update group's lastMessage
+    await GroupChat.findByIdAndUpdate(groupId, { lastMessage: systemMessage._id });
+
     // Emit socket event to group room for remaining members
     const io = req.app.get('io');
     io.to(groupId).emit('member-left', {
@@ -172,6 +193,11 @@ const leaveGroup = async (req, res) => {
       userId,
       group: updated
     });
+
+    // Emit the system message to the group room
+    const populatedSystemMessage = await systemMessage.populate("sender", "name avatar");
+    populatedSystemMessage.chatId = populatedSystemMessage.chatId.toString();
+    io.to(groupId).emit("new-message", populatedSystemMessage);
 
     // Emit 'group-removed' to leaving user for real-time sidebar update
     io.to(userId.toString()).emit('group-removed', {
@@ -328,6 +354,28 @@ const addMembers = async (req, res) => {
       .populate("members", "name avatar isOnline")
       .populate("admins", "name avatar");
 
+    // Create system message for added members
+    const Message = require("../models/Message");
+    const User = require("../models/User");
+
+    // Get admin name
+    const admin = await User.findById(userId).select("name");
+    // Get added users' names
+    const addedUsers = await User.find({ _id: { $in: newMembers } }).select("name");
+
+    const addedNames = addedUsers.map(u => u.name).join(", ");
+    const systemText = `${admin.name} added ${addedNames}`;
+
+    const systemMessage = await Message.create({
+      chatId: groupId,
+      sender: userId, // Admin who added
+      type: "system",
+      text: systemText,
+    });
+
+    // Update group's lastMessage
+    await GroupChat.findByIdAndUpdate(groupId, { lastMessage: systemMessage._id });
+
     // Emit socket event to group room for current members
     const io = req.app.get('io');
     io.to(groupId).emit('members-added', {
@@ -335,6 +383,11 @@ const addMembers = async (req, res) => {
       newMembers,
       group: updated
     });
+
+    // Emit the system message to the group room
+    const populatedSystemMessage = await systemMessage.populate("sender", "name avatar");
+    populatedSystemMessage.chatId = populatedSystemMessage.chatId.toString();
+    io.to(groupId).emit("new-message", populatedSystemMessage);
 
     // Emit 'group-added' to new members for real-time sidebar update
     // Format the group data similar to getMyGroups API
@@ -389,6 +442,26 @@ const removeMember = async (req, res) => {
       .populate("members", "name avatar isOnline")
       .populate("admins", "name avatar");
 
+    // Create system message for removed member
+    const Message = require("../models/Message");
+    const User = require("../models/User");
+
+    // Get admin name and removed user name
+    const admin = await User.findById(userId).select("name");
+    const removedUser = await User.findById(memberId).select("name");
+
+    const systemText = `${admin.name} removed ${removedUser.name}`;
+
+    const systemMessage = await Message.create({
+      chatId: groupId,
+      sender: userId, // Admin who removed
+      type: "system",
+      text: systemText,
+    });
+
+    // Update group's lastMessage
+    await GroupChat.findByIdAndUpdate(groupId, { lastMessage: systemMessage._id });
+
     // Emit socket event to group room for remaining members
     const io = req.app.get('io');
     io.to(groupId).emit('member-removed', {
@@ -396,6 +469,11 @@ const removeMember = async (req, res) => {
       memberId,
       group: updated
     });
+
+    // Emit the system message to the group room
+    const populatedSystemMessage = await systemMessage.populate("sender", "name avatar");
+    populatedSystemMessage.chatId = populatedSystemMessage.chatId.toString();
+    io.to(groupId).emit("new-message", populatedSystemMessage);
 
     // Emit 'group-removed' to removed member for real-time sidebar update
     io.to(memberId.toString()).emit('group-removed', {

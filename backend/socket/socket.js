@@ -304,8 +304,21 @@ const socketServer = (io, onlineUsers) => {
             }
 
             // Format lastMessageText with sender name for groups
-            let lastMessageText = populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message");
-            if (groupChat) {
+            let lastMessageText = "";
+            if (populated.type === "text") {
+              lastMessageText = populated.text;
+            } else if (populated.type === "image") {
+              lastMessageText = "📷 Photo";
+            } else if (populated.type === "video") {
+              lastMessageText = "🎥 Video";
+            } else if (populated.type === "file") {
+              lastMessageText = "📎 File";
+            } else if (populated.type === "system") {
+              lastMessageText = populated.text;
+            } else {
+              lastMessageText = "Message";
+            }
+            if (groupChat && populated.type !== "system") {
               const senderName = populated.sender._id.toString() === participant._id.toString() ? "You" : populated.sender.name;
               lastMessageText = `${senderName}: ${lastMessageText}`;
             }

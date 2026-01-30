@@ -686,17 +686,22 @@ const deleteForEveryone = async (req, res) => {
               }
             } else {
               lastMessageText = "No messages yet";
-              lastMessageCreatedAt = null;
+              lastMessageCreatedAt = chatType === "group" ? chatData.updatedAt.toISOString() : null;
             }
           }
         }
+      } else {
+        // No messages at all
+        lastMessageCreatedAt = chatType === "group" ? chatData.updatedAt.toISOString() : null;
       }
 
       req.app.get("io").to(participant._id.toString()).emit("sidebar-message-update", {
         chatId: message.chatId.toString(),
         lastMessageText,
         lastMessageCreatedAt,
-        scope: "for-everyone"
+        scope: "for-everyone",
+        isGroup: chatType === "group",
+        groupUpdatedAt: chatType === "group" ? chatData.updatedAt.toISOString() : null
       });
     }
 

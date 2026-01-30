@@ -134,7 +134,7 @@ function Sidebar() {
           const group = draft.find(g => g._id.toString() === data.chatId.toString());
           if (group) {
             group.lastMessage = data.lastMessageText;
-            group.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
+            group.lastMessageCreatedAt = data.lastMessageCreatedAt || (data.groupUpdatedAt ? data.groupUpdatedAt : new Date().toISOString());
             group.unreadCount = data.unreadCount || 0;
           }
           // Sort by lastMessageCreatedAt descending
@@ -224,7 +224,7 @@ function Sidebar() {
             if (group) {
               group.unreadCount = data.unreadCount || 0;
               group.lastMessage = data.lastMessageText;
-              group.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
+              group.lastMessageCreatedAt = data.lastMessageCreatedAt || (data.groupUpdatedAt ? data.groupUpdatedAt : new Date().toISOString());
             }
             // Sort by lastMessageCreatedAt descending
             draft.sort((a, b) => {
@@ -297,6 +297,60 @@ function Sidebar() {
       dispatch(chatApi.util.invalidateTags(["Groups"]));
     };
 
+    const groupAddedHandler = (group) => {
+      console.log("➕ Group added received:", group);
+      // Add the group to the cache
+      dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+        // Check if group already exists
+        const existingIndex = draft.findIndex(g => g._id === group._id);
+        if (existingIndex === -1) {
+          console.log("➕ Adding group to cache:", group.name);
+          draft.push(group);
+          // Sort by lastMessageCreatedAt descending
+          draft.sort((a, b) => {
+            const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+            const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+            return bTime - aTime;
+          });
+        } else {
+          console.log("➕ Group already exists in cache");
+        }
+      }));
+    };
+
+    const groupRemovedHandler = (data) => {
+      console.log("➖ Group removed:", data);
+      // Remove the group from the cache
+      dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+        const index = draft.findIndex(g => g._id === data.groupId);
+        if (index !== -1) {
+          draft.splice(index, 1);
+        }
+      }));
+    };
+
+    const groupUpdatedHandler = (updatedGroup) => {
+      console.log("🔄 Group updated:", updatedGroup);
+      // Update the group in the cache
+      dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+        const group = draft.find(g => g._id === updatedGroup._id);
+        if (group) {
+          Object.assign(group, updatedGroup);
+        }
+      }));
+    };
+
+    const groupDeletedHandler = (data) => {
+      console.log("🗑️ Group deleted:", data);
+      // Remove the group from the cache
+      dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+        const index = draft.findIndex(g => g._id === data.groupId);
+        if (index !== -1) {
+          draft.splice(index, 1);
+        }
+      }));
+    };
+
     const connectHandler = () => {
       console.log("🔌 Socket connected, refetching sidebar");
       refetch();
@@ -308,6 +362,10 @@ function Sidebar() {
     socket.on("online-users", onlineUsersHandler);
     socket.on("user-status-update", userStatusUpdateHandler);
     socket.on("group-created", groupCreatedHandler);
+    socket.on("group-added", groupAddedHandler);
+    socket.on("group-removed", groupRemovedHandler);
+    socket.on("group-updated", groupUpdatedHandler);
+    socket.on("group-deleted", groupDeletedHandler);
     socket.on("connect", connectHandler);
     return () => {
       socket.off("sidebar-update", handler);
@@ -316,6 +374,10 @@ function Sidebar() {
       socket.off("online-users", onlineUsersHandler);
       socket.off("user-status-update", userStatusUpdateHandler);
       socket.off("group-created", groupCreatedHandler);
+      socket.off("group-added", groupAddedHandler);
+      socket.off("group-removed", groupRemovedHandler);
+      socket.off("group-updated", groupUpdatedHandler);
+      socket.off("group-deleted", groupDeletedHandler);
       socket.off("connect", connectHandler);
     };
   }, [dispatch, refetch, currentUser?._id, groups]);

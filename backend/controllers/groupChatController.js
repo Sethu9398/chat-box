@@ -120,7 +120,7 @@ const getMyGroups = async (req, res) => {
     // Convert to plain object and add unreadCount and lastMessageCreatedAt
     const groupObj = group.toObject();
     groupObj.unreadCount = unreadCount;
-    groupObj.lastMessageCreatedAt = lastMessageCreatedAt ? lastMessageCreatedAt.toISOString() : null;
+    groupObj.lastMessageCreatedAt = lastMessageCreatedAt ? lastMessageCreatedAt.toISOString() : group.updatedAt.toISOString();
 
     return groupObj;
   }));
@@ -161,12 +161,18 @@ const leaveGroup = async (req, res) => {
 
     await group.save();
 
-    // Emit socket event
+    // Emit socket event to group room for remaining members
     const io = req.app.get('io');
     io.to(groupId).emit('member-left', {
       groupId,
       userId,
       group
+    });
+
+    // Emit 'group-removed' to leaving user for real-time sidebar update
+    io.to(userId.toString()).emit('group-removed', {
+      groupId,
+      message: 'You left the group'
     });
 
     res.json({ message: "Left group successfully", group });
@@ -318,12 +324,31 @@ const addMembers = async (req, res) => {
       .populate("members", "name avatar isOnline")
       .populate("admins", "name avatar");
 
-    // Emit socket event
+    // Emit socket event to group room for current members
     const io = req.app.get('io');
     io.to(groupId).emit('members-added', {
       groupId,
       newMembers,
       group: updated
+    });
+
+    // Emit 'group-added' to new members for real-time sidebar update
+    // Format the group data similar to getMyGroups API
+    const formattedGroup = {
+      _id: updated._id,
+      name: updated.name,
+      avatar: updated.avatar,
+      members: updated.members,
+      admins: updated.admins,
+      lastMessage: "No messages yet",
+      unreadCount: 0,
+      lastMessageCreatedAt: null
+    };
+
+    console.log("🚀 Emitting group-added to new members:", newMembers);
+    newMembers.forEach(memberId => {
+      console.log("📤 Emitting to user:", memberId.toString());
+      io.to(memberId.toString()).emit('group-added', formattedGroup);
     });
 
     res.json(updated);
@@ -360,12 +385,18 @@ const removeMember = async (req, res) => {
       .populate("members", "name avatar isOnline")
       .populate("admins", "name avatar");
 
-    // Emit socket event
+    // Emit socket event to group room for remaining members
     const io = req.app.get('io');
     io.to(groupId).emit('member-removed', {
       groupId,
       memberId,
       group: updated
+    });
+
+    // Emit 'group-removed' to removed member for real-time sidebar update
+    io.to(memberId.toString()).emit('group-removed', {
+      groupId,
+      message: 'You were removed from the group'
     });
 
     res.json(updated);

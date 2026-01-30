@@ -315,7 +315,9 @@ const socketServer = (io, onlineUsers) => {
               lastMessageText,
               lastMessageCreatedAt: populated.createdAt.toISOString(),
               unreadCount,
-              scope: "for-everyone"
+              scope: "for-everyone",
+              isGroup: !!groupChat,
+              groupUpdatedAt: groupChat ? groupChat.updatedAt.toISOString() : null
             });
           }
         }

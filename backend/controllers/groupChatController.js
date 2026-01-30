@@ -161,12 +161,16 @@ const leaveGroup = async (req, res) => {
 
     await group.save();
 
+    const updated = await GroupChat.findById(groupId)
+      .populate("members", "name avatar isOnline")
+      .populate("admins", "name avatar");
+
     // Emit socket event to group room for remaining members
     const io = req.app.get('io');
     io.to(groupId).emit('member-left', {
       groupId,
       userId,
-      group
+      group: updated
     });
 
     // Emit 'group-removed' to leaving user for real-time sidebar update

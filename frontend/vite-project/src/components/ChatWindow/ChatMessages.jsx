@@ -218,6 +218,31 @@ function ChatMessages({
           const m = item;
           const isMe = m.sender?._id === me?._id;
 
+          // SYSTEM MESSAGE
+          if (m.type === "system") {
+            return (
+              <div
+                key={m._id}
+                ref={i === messagesWithDates.length - 1 ? lastMessageRef : null}
+                className="d-flex justify-content-center mb-2"
+              >
+                <div
+                  style={{
+                    background: "#f0f0f0",
+                    padding: "6px 12px",
+                    borderRadius: "12px",
+                    fontSize: "14px",
+                    color: "#666",
+                    textAlign: "center",
+                    maxWidth: "70%",
+                  }}
+                >
+                  {m.text}
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div
               key={m._id}

@@ -77,6 +77,10 @@ function Home() {
     };
 
     const handleMemberLeft = (data) => {
+      // Update selectedGroup if currently viewing this group
+      if (selectedGroup && selectedGroup._id === data.groupId) {
+        dispatch(setSelectedGroup(data.group));
+      }
       // Invalidate groups cache to refresh sidebar
       dispatch(chatApi.util.invalidateTags(['Groups']));
     };

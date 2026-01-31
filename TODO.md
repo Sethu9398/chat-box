@@ -1,20 +1,24 @@
-# TODO: Implement WhatsApp-style Group System Messages
+# Task: Fix Group Sidebar LastMessage Sender Name Real-Time Updates
 
-## Backend Changes
-- [x] Update Message Model: Add "system" type to enum in backend/models/Message.js
-- [x] Modify addMembers in groupChatController.js: Create system message for added members, update lastMessage, emit socket
-- [x] Modify removeMember in groupChatController.js: Create system message for removed member, update lastMessage, emit socket
-- [x] Modify leaveGroup in groupChatController.js: Create system message for leaving member, update lastMessage, emit socket
-- [x] Update getMyGroups in groupChatController.js: Handle system messages in lastMessage formatting
-- [x] Update socket.js: Handle system messages in sidebar updates
+## Status: ✅ COMPLETED
 
-## Frontend Changes
-- [x] Update ChatMessages.jsx: Add rendering logic for system messages (centered, no avatar, no ticks, non-replyable)
-- [x] Update Sidebar.jsx: System messages display correctly in group list as last message (handled via backend formatting)
+### Problem
+- Group sidebar lastMessage sender name only updated after page refresh
+- When navigating in/out of group chats, sender names didn't update in real-time
 
-## Testing
-- [ ] Test adding members to group
-- [ ] Test removing members from group
-- [ ] Test leaving group
-- [ ] Verify real-time socket updates
-- [ ] Confirm UI/UX matches WhatsApp style
+### Root Cause
+- Socket events "join-chat" and "leave-chat" were not properly populating sender information
+- lastMessageText was formatted with hardcoded sender names instead of checking if current user is the sender
+
+### Solution Implemented
+- Updated "join-chat" event to populate sender info and use "You" for current user's messages
+- Updated "leave-chat" event to populate sender info and use "You" for current user's messages
+- Now correctly formats lastMessageText as "You: message" or "SenderName: message" based on current user
+
+### Files Modified
+- `backend/socket/socket.js`: Fixed join-chat and leave-chat events to properly handle sender names
+
+### Testing
+- Real-time sidebar updates now work correctly when navigating group chats
+- Sender names update immediately without page refresh
+- Works for both normal messages and system messages

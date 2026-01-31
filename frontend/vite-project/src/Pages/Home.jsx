@@ -77,12 +77,13 @@ function Home() {
     };
 
     const handleMemberLeft = (data) => {
+      console.log("👤 Member left event received:", data);
       // Update selectedGroup if currently viewing this group
       if (selectedGroup && selectedGroup._id === data.groupId) {
         dispatch(setSelectedGroup(data.group));
       }
-      // Invalidate groups cache to refresh sidebar
-      dispatch(chatApi.util.invalidateTags(['Groups']));
+      // Invalidate groups cache to refresh sidebar - this will be handled by sidebar-message-update event
+      // Don't invalidate here as sidebar-message-update event will update the cache
     };
 
     socket.on("group-updated", handleGroupUpdated);

@@ -95,13 +95,23 @@ function ChatMessages({
       }
     };
 
+    const onMessageDeleted = (data) => {
+      if (data.messageId) {
+        setSocketMessages((prev) =>
+          prev.filter(msg => msg._id !== data.messageId)
+        );
+      }
+    };
+
     socket.on("new-message", onNew);
     socket.on("status-update", onStatusUpdate);
     socket.on("message-updated", onMessageUpdated);
+    socket.on("message-deleted", onMessageDeleted);
     return () => {
       socket.off("new-message", onNew);
       socket.off("status-update", onStatusUpdate);
       socket.off("message-updated", onMessageUpdated);
+      socket.off("message-deleted", onMessageDeleted);
     };
   }, [chatId, me?._id, markAsRead]);
 
@@ -259,16 +269,18 @@ function ChatMessages({
                   className="position-relative"
                 >
                   {/* DROPDOWN TRIGGER */}
-                  <div
-                    className="position-absolute top-0 end-0 p-1"
-                    style={{ cursor: "pointer" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDropdownOpen(dropdownOpen === m._id ? null : m._id);
-                    }}
-                  >
-                    ⋮
-                  </div>
+                  {m.type !== "system" && (
+                    <div
+                      className="position-absolute top-0 end-0 p-1"
+                      style={{ cursor: "pointer" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDropdownOpen(dropdownOpen === m._id ? null : m._id);
+                      }}
+                    >
+                      ⋮
+                    </div>
+                  )}
 
                   {/* SENDER NAME */}
                   {!isMe && chatType === 'group' && (
@@ -421,7 +433,7 @@ function ChatMessages({
                   )}
 
                   {/* DROPDOWN MENU */}
-                  {dropdownOpen === m._id && (
+                  {dropdownOpen === m._id && m.type !== "system" && (
                     <div
                       className="position-absolute bg-white border rounded shadow-sm p-2"
                       style={{

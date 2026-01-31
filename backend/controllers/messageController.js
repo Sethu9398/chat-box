@@ -109,7 +109,7 @@ const calculateGroupMessageStatus = async (messageId, chatId, senderId, io, onli
 ========================= */
 const updateGroupMessageStatuses = async (chatId, io, onlineUsers) => {
   try {
-    // Only check messages that are not already read
+    // Only check messages that are not already read (including system messages)
     const messages = await Message.find({
       chatId,
       status: { $ne: "read" }
@@ -123,11 +123,11 @@ const updateGroupMessageStatuses = async (chatId, io, onlineUsers) => {
         io,
         onlineUsers
       );
-      
+
       if (newStatus !== message.status) {
         // Update database
         await Message.findByIdAndUpdate(message._id, { status: newStatus });
-        
+
         // Emit status update to sender
         io.to(message.sender._id.toString()).emit("status-update", {
           messageId: message._id.toString(),
@@ -162,7 +162,7 @@ const getMessages = async (req, res) => {
 
   // ✅ GROUP CHAT - Mark as read only for the current user viewing
   if (type === "group") {
-    // Mark messages as read for the current user (they are viewing the chat)
+    // Mark messages as read for the current user (they are viewing the chat) - including system messages
     await Message.updateMany(
       {
         chatId,
@@ -223,6 +223,7 @@ const getMessages = async (req, res) => {
     await Message.updateMany(
       {
         chatId,
+        type: { $ne: "system" },
         sender: { $ne: req.user._id },
         status: "sent",
         deletedBy: { $ne: req.user._id },
@@ -235,6 +236,7 @@ const getMessages = async (req, res) => {
   await Message.updateMany(
     {
       chatId,
+      type: { $ne: "system" },
       sender: { $ne: req.user._id },
       status: { $ne: "read" },
       deletedBy: { $ne: req.user._id },
@@ -312,8 +314,13 @@ const sendMessage = async (req, res) => {
     if (chatType === "group") {
       await GroupChat.findByIdAndUpdate(chatId, { lastMessage: message._id });
 
+      const io = req.app.get("io");
+      const onlineUsers = req.app.get("onlineUsers");
+
+      console.log(`📨 New message in group ${chatId}, members:`, data.members.length);
+
       for (const member of data.members) {
-        req.app.get("io").to(member.toString()).emit("new-message", populated);
+        io.to(member.toString()).emit("new-message", populated);
       }
 
       // Emit sidebar updates for group chat
@@ -336,21 +343,101 @@ const sendMessage = async (req, res) => {
           lastMessageText = `${senderName}: ${msgType}`;
         }
 
-        req.app.get("io").to(member.toString()).emit("sidebar-message-update", {
+        // Check if this member is currently viewing the group chat
+        const socketId = onlineUsers.get(member.toString());
+        const isViewingChat = socketId && io.sockets.adapter.rooms.get(chatId.toString())?.has(socketId);
+
+        let unreadCount = 0;
+        if (member.toString() !== req.user._id.toString()) {
+          if (isViewingChat) {
+            // User is viewing, no unread messages
+            unreadCount = 0;
+          } else {
+            // Calculate total unread count for this member (including system messages)
+            unreadCount = await Message.countDocuments({
+              chatId,
+              sender: { $ne: member._id },
+              status: { $ne: "read" },
+              deletedBy: { $ne: member._id },
+              deletedForAll: false
+            });
+          }
+        }
+
+        console.log(`✅ EMIT sidebar-update [sendMessage] to ${member.toString()}: unreadCount=${unreadCount}, isViewing=${isViewingChat}`);
+        
+        io.to(member.toString()).emit("sidebar-message-update", {
           chatId: chatId.toString(),
           lastMessageText,
           lastMessageCreatedAt: populated.createdAt.toISOString(),
-          unreadCount: member.toString() === req.user._id.toString() ? 0 : 0, // For now, set to 0; can be calculated later
-          scope: member.toString() === req.user._id.toString() ? "for-me" : "for-everyone"
+          unreadCount,
+          scope: member.toString() === req.user._id.toString() ? "for-me" : "for-everyone",
+          isGroup: true,
+          isViewingChat: isViewingChat,
+          isNewMessage: true
         });
       }
 
       return res.status(201).json(populated);
     }
 
-    // ✅ PRIVATE CHAT (UNCHANGED)
+    // ✅ PRIVATE CHAT
     await Chat.findByIdAndUpdate(chatId, { lastMessage: message._id });
-    req.app.get("io").to(chatId.toString()).emit("new-message", populated);
+    
+    const io = req.app.get("io");
+    const onlineUsers = req.app.get("onlineUsers");
+    
+    io.to(chatId.toString()).emit("new-message", populated);
+
+    // Emit sidebar updates for private chat
+    const chat = await Chat.findById(chatId).populate("participants");
+    for (const participant of chat.participants) {
+      if (participant._id.toString() !== req.user._id.toString()) {
+        // Check if participant is currently viewing the chat
+        const socketId = onlineUsers.get(participant._id.toString());
+        const isViewingChat = socketId && io.sockets.adapter.rooms.get(chatId.toString())?.has(socketId);
+
+        let unreadCount = 0;
+        if (!isViewingChat) {
+          // Calculate total unread count for this participant (excluding system messages and read messages)
+          unreadCount = await Message.countDocuments({
+            chatId,
+            type: { $ne: "system" },
+            sender: { $ne: participant._id },
+            status: { $ne: "read" },
+            deletedBy: { $ne: participant._id },
+            deletedForAll: false
+          });
+        }
+
+        io.to(participant._id.toString()).emit("sidebar-message-update", {
+          chatId: chatId.toString(),
+          lastMessageText: populated.type === "text" ? populated.text : 
+                          populated.type === "image" ? "📷 Photo" :
+                          populated.type === "video" ? "🎥 Video" :
+                          populated.type === "file" ? "📎 File" : "Message",
+          lastMessageCreatedAt: populated.createdAt.toISOString(),
+          unreadCount, // Now this is the ACTUAL total unread count, not just an increment
+          scope: "for-everyone",
+          isViewingChat: isViewingChat,
+          isNewMessage: true
+        });
+      }
+    }
+
+    // Emit sidebar update for sender (unread count stays 0)
+    io.to(req.user._id.toString()).emit("sidebar-message-update", {
+      chatId: chatId.toString(),
+      lastMessageText: populated.type === "text" ? populated.text :
+                      populated.type === "image" ? "📷 Photo" :
+                      populated.type === "video" ? "🎥 Video" :
+                      populated.type === "file" ? "📎 File" : "Message",
+      lastMessageCreatedAt: populated.createdAt.toISOString(),
+      unreadCount: 0,
+      scope: "for-me",
+      isViewingChat: true,
+      isNewMessage: true
+    });
 
     res.status(201).json(populated);
   } catch (err) {
@@ -430,8 +517,11 @@ const uploadMessage = async (req, res) => {
 
       populated.chatId = populated.chatId.toString();
 
+      const io = req.app.get("io");
+      const onlineUsers = req.app.get("onlineUsers");
+
       for (const member of data.members) {
-        req.app.get("io").to(member.toString()).emit("new-message", populated);
+        io.to(member.toString()).emit("new-message", populated);
       }
 
       // Emit sidebar updates for group chat
@@ -454,12 +544,36 @@ const uploadMessage = async (req, res) => {
           lastMessageText = `${senderName}: ${msgType}`;
         }
 
-        req.app.get("io").to(member.toString()).emit("sidebar-message-update", {
+        // Check if this member is currently viewing the group chat
+        const socketId = onlineUsers.get(member.toString());
+        const isViewingChat = socketId && io.sockets.adapter.rooms.get(chatId.toString())?.has(socketId);
+
+        let unreadCount = 0;
+        if (member.toString() !== req.user._id.toString()) {
+          if (isViewingChat) {
+            // User is viewing, no unread messages
+            unreadCount = 0;
+          } else {
+            // Calculate total unread count for this member (including system messages)
+            unreadCount = await Message.countDocuments({
+              chatId,
+              sender: { $ne: member._id },
+              status: { $ne: "read" },
+              deletedBy: { $ne: member._id },
+              deletedForAll: false
+            });
+          }
+        }
+
+        io.to(member.toString()).emit("sidebar-message-update", {
           chatId: chatId.toString(),
           lastMessageText,
           lastMessageCreatedAt: populated.createdAt.toISOString(),
-          unreadCount: member.toString() === req.user._id.toString() ? 0 : 0, // For now, set to 0; can be calculated later
-          scope: member.toString() === req.user._id.toString() ? "for-me" : "for-everyone"
+          unreadCount,
+          scope: member.toString() === req.user._id.toString() ? "for-me" : "for-everyone",
+          isGroup: true,
+          isViewingChat: isViewingChat,
+          isNewMessage: true
         });
       }
 
@@ -507,9 +621,10 @@ const uploadMessage = async (req, res) => {
         const isViewingChat = socketId && io.sockets.adapter.rooms.get(chatId.toString())?.has(socketId);
         let unreadCount = 0;
         if (!isViewingChat) {
-          // Calculate unread count for this participant
+          // Calculate total unread count for this participant (excluding system messages and read messages)
           unreadCount = await Message.countDocuments({
             chatId,
+            type: { $ne: "system" },
             sender: { $ne: participant._id },
             status: { $ne: "read" },
             deletedBy: { $ne: participant._id },
@@ -528,8 +643,10 @@ const uploadMessage = async (req, res) => {
           chatId: chatId.toString(),
           lastMessageText,
           lastMessageCreatedAt: populated.createdAt.toISOString(),
-          unreadCount,
-          scope: "for-everyone"
+          unreadCount, // Now this is the ACTUAL total unread count, not just an increment
+          scope: "for-everyone",
+          isViewingChat: isViewingChat,
+          isNewMessage: true
         });
       }
     }
@@ -562,6 +679,9 @@ const deleteForMe = async (req, res) => {
     const message = await Message.findById(id);
     if (!message) return res.status(404).json({ message: "Message not found" });
 
+    // Get chat context to determine if it's group or private
+    const { type: chatType, data: chatData } = await getChatContext(message.chatId);
+
     // Check if this is the last visible message for this user before deletion
     const lastVisibleMessage = await getLastVisibleMessage(message.chatId, req.user._id);
     const isLastVisible = lastVisibleMessage && lastVisibleMessage._id.toString() === id;
@@ -582,19 +702,38 @@ const deleteForMe = async (req, res) => {
         _id: { $ne: id } // Exclude the deleted one
       }).sort({ createdAt: -1 });
 
-      // Update Chat.lastMessage in backend
-      await Chat.findByIdAndUpdate(message.chatId, {
-        lastMessage: newLastVisibleMessage ? newLastVisibleMessage._id : null
-      });
+      // Update Chat/Group lastMessage in backend
+      if (chatType === "group") {
+        await GroupChat.findByIdAndUpdate(message.chatId, {
+          lastMessage: newLastVisibleMessage ? newLastVisibleMessage._id : null
+        });
+      } else {
+        await Chat.findByIdAndUpdate(message.chatId, {
+          lastMessage: newLastVisibleMessage ? newLastVisibleMessage._id : null
+        });
+      }
 
-      const lastMessageText = newLastVisibleMessage ? getLastMessageText(newLastVisibleMessage) : "No messages yet";
+      let lastMessageText = "No messages yet";
+      let lastMessageCreatedAt = null;
+
+      if (newLastVisibleMessage) {
+        lastMessageCreatedAt = newLastVisibleMessage.createdAt.toISOString();
+        lastMessageText = getLastMessageText(newLastVisibleMessage);
+        
+        // Format with sender name for groups
+        if (chatType === "group") {
+          const senderName = newLastVisibleMessage.sender._id.toString() === req.user._id.toString() ? "You" : newLastVisibleMessage.sender?.name || "User";
+          lastMessageText = `${senderName}: ${lastMessageText}`;
+        }
+      }
 
       // Emit sidebar update only to this user
       req.app.get("io").to(req.user._id.toString()).emit("sidebar-message-update", {
         chatId: message.chatId.toString(),
         lastMessageText,
-        lastMessageCreatedAt: newLastVisibleMessage ? newLastVisibleMessage.createdAt.toISOString() : null,
-        scope: "for-me"
+        lastMessageCreatedAt,
+        scope: "for-me",
+        isGroup: chatType === "group"
       });
     }
 

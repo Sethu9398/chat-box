@@ -87,6 +87,9 @@ const getMyGroups = async (req, res) => {
 
       if (group.lastMessage.deletedForAll) {
         group.lastMessage = "This message was deleted";
+      } else if (!group.lastMessage.sender) {
+        // Handle case where sender no longer exists
+        group.lastMessage = group.lastMessage.type === "system" ? group.lastMessage.text : "Message";
       } else {
         const senderName = group.lastMessage.sender._id.toString() === req.user._id.toString() ? "You" : group.lastMessage.sender.name;
         let messageText = "";
@@ -183,15 +186,21 @@ const leaveGroup = async (req, res) => {
       text: systemText,
     });
 
-    // Update group's lastMessage
-    await GroupChat.findByIdAndUpdate(groupId, { lastMessage: systemMessage._id });
+    // Update group's lastMessage and get the updated group
+    const updatedWithLastMessage = await GroupChat.findByIdAndUpdate(
+      groupId, 
+      { lastMessage: systemMessage._id },
+      { new: true }
+    )
+      .populate("members", "name avatar isOnline")
+      .populate("admins", "name avatar");
 
     // Emit socket event to group room for remaining members
     const io = req.app.get('io');
     io.to(groupId).emit('member-left', {
       groupId,
       userId,
-      group: updated
+      group: updatedWithLastMessage
     });
 
     // Emit the system message to the group room
@@ -199,9 +208,44 @@ const leaveGroup = async (req, res) => {
     populatedSystemMessage.chatId = populatedSystemMessage.chatId.toString();
     io.to(groupId).emit("new-message", populatedSystemMessage);
 
+    // Emit sidebar-message-update to each remaining member with their correct unread count
+    const onlineUsers = req.app.get('onlineUsers');
+    for (const member of updatedWithLastMessage.members) {
+      if (member._id.toString() !== userId.toString()) {
+        console.log(`📤 Emitting sidebar update to remaining member ${member._id} after user left`);
+        
+        // Check if this member is viewing this group chat
+        const socketId = onlineUsers.get(member._id.toString());
+        const isViewingChat = socketId && io.sockets.adapter.rooms.get(groupId.toString())?.has(socketId);
+        
+        let unreadCount = 0;
+        if (!isViewingChat) {
+          // Calculate unread count for this member - include system messages
+          unreadCount = await Message.countDocuments({
+            chatId: groupId,
+            sender: { $ne: member._id },
+            status: { $ne: "read" },
+            deletedBy: { $ne: member._id },
+            deletedForAll: false
+          });
+        }
+
+        io.to(member._id.toString()).emit("sidebar-message-update", {
+          chatId: groupId.toString(),
+          lastMessageText: systemText,
+          lastMessageCreatedAt: systemMessage.createdAt.toISOString(),
+          unreadCount,
+          scope: "for-everyone",
+          isGroup: true,
+          isNewMessage: true
+        });
+      }
+    }
+
     // Emit 'group-removed' to leaving user for real-time sidebar update
+    console.log(`📤 Emitting group-removed event to user ${userId} who left`);
     io.to(userId.toString()).emit('group-removed', {
-      groupId,
+      groupId: groupId.toString(),
       message: 'You left the group'
     });
 
@@ -373,15 +417,26 @@ const addMembers = async (req, res) => {
       text: systemText,
     });
 
-    // Update group's lastMessage
-    await GroupChat.findByIdAndUpdate(groupId, { lastMessage: systemMessage._id });
+    // Update group's lastMessage and refresh the group to ensure lastMessage is set
+    const updatedGroupWithLastMessage = await GroupChat.findByIdAndUpdate(
+      groupId, 
+      { lastMessage: systemMessage._id },
+      { new: true } // Return the updated document
+    )
+      .populate("members", "name avatar isOnline")
+      .populate("admins", "name avatar");
+    
+    // Verify the lastMessage was actually set
+    if (!updatedGroupWithLastMessage.lastMessage) {
+      console.error("❌ Failed to set lastMessage for group:", groupId);
+    }
 
     // Emit socket event to group room for current members
     const io = req.app.get('io');
     io.to(groupId).emit('members-added', {
       groupId,
       newMembers,
-      group: updated
+      group: updatedGroupWithLastMessage
     });
 
     // Emit the system message to the group room
@@ -389,17 +444,49 @@ const addMembers = async (req, res) => {
     populatedSystemMessage.chatId = populatedSystemMessage.chatId.toString();
     io.to(groupId).emit("new-message", populatedSystemMessage);
 
+    // Emit sidebar-message-update to each group member with their correct unread count
+    const onlineUsers = req.app.get('onlineUsers');
+    for (const member of updatedGroupWithLastMessage.members) {
+      console.log(`📤 Emitting sidebar update to member ${member._id} after adding new members`);
+      
+      // Check if this member is viewing this group chat
+      const socketId = onlineUsers.get(member._id.toString());
+      const isViewingChat = socketId && io.sockets.adapter.rooms.get(groupId.toString())?.has(socketId);
+      
+      let unreadCount = 0;
+      if (!isViewingChat) {
+        // Calculate unread count for this member - include system messages
+        unreadCount = await Message.countDocuments({
+          chatId: groupId,
+          sender: { $ne: member._id },
+          status: { $ne: "read" },
+          deletedBy: { $ne: member._id },
+          deletedForAll: false
+        });
+      }
+
+      io.to(member._id.toString()).emit("sidebar-message-update", {
+        chatId: groupId.toString(),
+        lastMessageText: systemText,
+        lastMessageCreatedAt: systemMessage.createdAt.toISOString(),
+        unreadCount,
+        scope: "for-everyone",
+        isGroup: true,
+        isNewMessage: true
+      });
+    }
+
     // Emit 'group-added' to new members for real-time sidebar update
     // Format the group data similar to getMyGroups API
     const formattedGroup = {
-      _id: updated._id,
-      name: updated.name,
-      avatar: updated.avatar,
-      members: updated.members,
-      admins: updated.admins,
-      lastMessage: "No messages yet",
+      _id: updatedGroupWithLastMessage._id,
+      name: updatedGroupWithLastMessage.name,
+      avatar: updatedGroupWithLastMessage.avatar,
+      members: updatedGroupWithLastMessage.members,
+      admins: updatedGroupWithLastMessage.admins,
+      lastMessage: systemText,
       unreadCount: 0,
-      lastMessageCreatedAt: null
+      lastMessageCreatedAt: systemMessage.createdAt.toISOString()
     };
 
     console.log("🚀 Emitting group-added to new members:", newMembers);
@@ -408,7 +495,7 @@ const addMembers = async (req, res) => {
       io.to(memberId.toString()).emit('group-added', formattedGroup);
     });
 
-    res.json(updated);
+    res.json(updatedGroupWithLastMessage);
   } catch (error) {
     res.status(500).json({ message: "Error adding members", error: error.message });
   }
@@ -459,15 +546,21 @@ const removeMember = async (req, res) => {
       text: systemText,
     });
 
-    // Update group's lastMessage
-    await GroupChat.findByIdAndUpdate(groupId, { lastMessage: systemMessage._id });
+    // Update group's lastMessage and get the updated group
+    const updatedWithLastMessage = await GroupChat.findByIdAndUpdate(
+      groupId, 
+      { lastMessage: systemMessage._id },
+      { new: true }
+    )
+      .populate("members", "name avatar isOnline")
+      .populate("admins", "name avatar");
 
     // Emit socket event to group room for remaining members
     const io = req.app.get('io');
     io.to(groupId).emit('member-removed', {
       groupId,
       memberId,
-      group: updated
+      group: updatedWithLastMessage
     });
 
     // Emit the system message to the group room
@@ -475,9 +568,42 @@ const removeMember = async (req, res) => {
     populatedSystemMessage.chatId = populatedSystemMessage.chatId.toString();
     io.to(groupId).emit("new-message", populatedSystemMessage);
 
+    // Emit sidebar-message-update to each remaining group member with their correct unread count
+    const onlineUsers = req.app.get('onlineUsers');
+    for (const member of updatedWithLastMessage.members) {
+      console.log(`📤 Emitting sidebar update to remaining member ${member._id} after member removal`);
+      
+      // Check if this member is viewing this group chat
+      const socketId = onlineUsers.get(member._id.toString());
+      const isViewingChat = socketId && io.sockets.adapter.rooms.get(groupId.toString())?.has(socketId);
+      
+      let unreadCount = 0;
+      if (!isViewingChat) {
+        // Calculate unread count for this member - include system messages
+        unreadCount = await Message.countDocuments({
+          chatId: groupId,
+          sender: { $ne: member._id },
+          status: { $ne: "read" },
+          deletedBy: { $ne: member._id },
+          deletedForAll: false
+        });
+      }
+
+      io.to(member._id.toString()).emit("sidebar-message-update", {
+        chatId: groupId.toString(),
+        lastMessageText: systemText,
+        lastMessageCreatedAt: systemMessage.createdAt.toISOString(),
+        unreadCount,
+        scope: "for-everyone",
+        isGroup: true,
+        isNewMessage: true
+      });
+    }
+
     // Emit 'group-removed' to removed member for real-time sidebar update
+    console.log(`📤 Emitting group-removed event to removed member ${memberId}`);
     io.to(memberId.toString()).emit('group-removed', {
-      groupId,
+      groupId: groupId.toString(),
       message: 'You were removed from the group'
     });
 

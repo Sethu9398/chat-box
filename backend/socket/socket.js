@@ -139,10 +139,13 @@ const socketServer = (io, onlineUsers) => {
       socket.join(chatId);
 
       // Check if this is a group chat and update message statuses
-      const groupChat = await GroupChat.findById(chatId);
+      const groupChat = await GroupChat.findById(chatId).populate({
+        path: "lastMessage",
+        populate: { path: "sender", select: "name _id" }
+      });
       if (groupChat) {
         // User is now viewing the group chat
-        // Mark messages from OTHER SENDERS as read
+        // Mark messages from OTHER SENDERS as read - including system messages
         await Message.updateMany(
           {
             chatId,
@@ -173,6 +176,35 @@ const socketServer = (io, onlineUsers) => {
 
         // Update statuses for ALL messages in the group based on current state
         await updateGroupMessageStatuses(chatId, io, onlineUsers);
+
+        // Get the latest message for sidebar update
+        let lastMessageText = "";
+        if (groupChat.lastMessage) {
+          const lastMsg = groupChat.lastMessage;
+          if (lastMsg.type === "text") {
+            const senderName = lastMsg.sender._id.toString() === socket.userId.toString() ? "You" : lastMsg.sender.name;
+            lastMessageText = `${senderName}: ${lastMsg.text}`;
+          } else if (lastMsg.type === "system") {
+            lastMessageText = lastMsg.text;
+          } else {
+            const senderName = lastMsg.sender._id.toString() === socket.userId.toString() ? "You" : lastMsg.sender.name;
+            const msgType = lastMsg.type === "image" ? "📷 Photo" :
+                           lastMsg.type === "video" ? "🎥 Video" :
+                           lastMsg.type === "file" ? "📎 File" :
+                           lastMsg.type === "voice" ? "🎙️ Voice" : "Message";
+            lastMessageText = `${senderName}: ${msgType}`;
+          }
+        }
+
+        // Emit sidebar update with lastMessage info to reset unread count for this user
+        io.to(socket.userId).emit("sidebar-message-update", {
+          chatId: chatId.toString(),
+          lastMessageText,
+          lastMessageCreatedAt: groupChat.lastMessage?.createdAt?.toISOString(),
+          unreadCount: 0,
+          scope: "read-update",
+          isGroup: true
+        });
       }
     });
 
@@ -181,11 +213,41 @@ const socketServer = (io, onlineUsers) => {
       socket.leave(chatId);
 
       // Check if this is a group chat and update message statuses
-      const groupChat = await GroupChat.findById(chatId);
+      const groupChat = await GroupChat.findById(chatId).populate({
+        path: "lastMessage",
+        populate: { path: "sender", select: "name _id" }
+      });
       if (groupChat) {
         // User left the chat, update statuses for all messages in the group
         // Some messages may no longer be "read" if no one is viewing
         await updateGroupMessageStatuses(chatId, io, onlineUsers);
+
+        // Emit sidebar update to this user with current lastMessage (in case it changed)
+        let lastMessageText = "";
+        if (groupChat.lastMessage) {
+          const lastMsg = groupChat.lastMessage;
+          if (lastMsg.type === "text") {
+            const senderName = lastMsg.sender._id.toString() === socket.userId.toString() ? "You" : lastMsg.sender.name;
+            lastMessageText = `${senderName}: ${lastMsg.text}`;
+          } else if (lastMsg.type === "system") {
+            lastMessageText = lastMsg.text;
+          } else {
+            const senderName = lastMsg.sender._id.toString() === socket.userId.toString() ? "You" : lastMsg.sender.name;
+            const msgType = lastMsg.type === "image" ? "📷 Photo" :
+                           lastMsg.type === "video" ? "🎥 Video" :
+                           lastMsg.type === "file" ? "📎 File" :
+                           lastMsg.type === "voice" ? "🎙️ Voice" : "Message";
+            lastMessageText = `${senderName}: ${msgType}`;
+          }
+        }
+
+        io.to(socket.userId).emit("sidebar-message-update", {
+          chatId: chatId.toString(),
+          lastMessageText,
+          lastMessageCreatedAt: groupChat.lastMessage?.createdAt?.toISOString(),
+          scope: "leave-update",
+          isGroup: true
+        });
       }
     });
 
@@ -208,15 +270,17 @@ const socketServer = (io, onlineUsers) => {
         // Determine if it's a group or private chat
         const groupChat = await GroupChat.findById(data.chatId);
         if (groupChat) {
-          // Group chat
+          // Group chat - update lastMessage
           await GroupChat.findByIdAndUpdate(data.chatId, {
             lastMessage: message._id,
           });
+          console.log(`📨 Socket: New message in group ${data.chatId}, members: ${groupChat.members.length}`);
         } else {
           // Private chat
           await Chat.findByIdAndUpdate(data.chatId, {
             lastMessage: message._id,
           });
+          console.log(`📨 Socket: New message in private chat ${data.chatId}`);
         }
 
         const populated = await message.populate([
@@ -227,7 +291,7 @@ const socketServer = (io, onlineUsers) => {
         // Convert chatId to string for socket emission
         populated.chatId = populated.chatId.toString();
 
-        // 🔥 IMPORTANT: SEND TO SOCKET CLIENTS
+        // 🔥 EMIT TO ALL MEMBERS IN CHAT ROOM
         io.to(data.chatId).emit("new-message", populated);
 
         // Get chat participants/members for delivery check and sidebar update
@@ -278,72 +342,62 @@ const socketServer = (io, onlineUsers) => {
           }
         }
 
-        // Emit new-message to each participant for real-time sidebar updates
+        // UPDATE SIDEBAR FOR ALL PARTICIPANTS
         for (const participant of participants) {
-          if (participant._id.toString() !== data.sender.toString()) {
-            io.to(participant._id.toString()).emit("new-message", populated);
-          }
-        }
-
-        // Update sidebar for all participants except sender (who will get direct update)
-        for (const participant of participants) {
-          if (participant._id.toString() !== data.sender.toString()) {
-            // Check if participant is currently viewing the chat
-            const socketId = onlineUsers.get(participant._id.toString());
-            const isViewingChat = socketId && io.sockets.adapter.rooms.get(data.chatId.toString())?.has(socketId);
-            let unreadCount = 0;
-            if (!isViewingChat) {
-              // Calculate unread count for this participant
-              unreadCount = await Message.countDocuments({
-                chatId: data.chatId,
-                sender: { $ne: participant._id },
-                status: { $ne: "read" },
-                deletedBy: { $ne: participant._id },
-                deletedForAll: false
-              });
-            }
-
-            // Format lastMessageText with sender name for groups
-            let lastMessageText = "";
-            if (populated.type === "text") {
-              lastMessageText = populated.text;
-            } else if (populated.type === "image") {
-              lastMessageText = "📷 Photo";
-            } else if (populated.type === "video") {
-              lastMessageText = "🎥 Video";
-            } else if (populated.type === "file") {
-              lastMessageText = "📎 File";
-            } else if (populated.type === "system") {
-              lastMessageText = populated.text;
-            } else {
-              lastMessageText = "Message";
-            }
-            if (groupChat && populated.type !== "system") {
-              const senderName = populated.sender._id.toString() === participant._id.toString() ? "You" : populated.sender.name;
-              lastMessageText = `${senderName}: ${lastMessageText}`;
-            }
-
-            io.to(participant._id.toString()).emit("sidebar-message-update", {
-              chatId: data.chatId.toString(),
-              lastMessageText,
-              lastMessageCreatedAt: populated.createdAt.toISOString(),
-              unreadCount,
-              scope: "for-everyone",
-              isGroup: !!groupChat,
-              groupUpdatedAt: groupChat ? groupChat.updatedAt.toISOString() : null
+          // Check if participant is currently viewing the chat
+          const socketId = onlineUsers.get(participant._id.toString());
+          const isViewingChat = socketId && io.sockets.adapter.rooms.get(data.chatId.toString())?.has(socketId);
+          let unreadCount = 0;
+          
+          if (!isViewingChat && participant._id.toString() !== data.sender.toString()) {
+            // Calculate unread count for this participant - exclude system messages
+            unreadCount = await Message.countDocuments({
+              chatId: data.chatId,
+              type: { $ne: "system" },
+              sender: { $ne: participant._id },
+              status: { $ne: "read" },
+              deletedBy: { $ne: participant._id },
+              deletedForAll: false
             });
           }
-        }
 
-        // Update sidebar for sender
-        io.to(data.sender.toString()).emit("sidebar-message-update", {
-          chatId: data.chatId.toString(),
-          lastMessageText: groupChat ? `You: ${populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message")}` : (populated.type === "text" ? populated.text : (populated.type === "image" ? "📷 Photo" : populated.type === "video" ? "🎥 Video" : populated.type === "file" ? "📎 File" : "Message")),
-          lastMessageCreatedAt: populated.createdAt.toISOString(),
-          unreadCount: 0,
-          scope: "for-me",
-          isGroup: !!groupChat
-        });
+          // Format lastMessageText based on message type
+          let lastMessageText = "";
+          if (populated.type === "text") {
+            lastMessageText = populated.text;
+          } else if (populated.type === "image") {
+            lastMessageText = "📷 Photo";
+          } else if (populated.type === "video") {
+            lastMessageText = "🎥 Video";
+          } else if (populated.type === "file") {
+            lastMessageText = "📎 File";
+          } else if (populated.type === "system") {
+            lastMessageText = populated.text;
+          } else if (populated.type === "voice") {
+            lastMessageText = "🎙️ Voice";
+          } else {
+            lastMessageText = "Message";
+          }
+
+          // Add sender name for groups and private chats (except system messages)
+          if (populated.type !== "system") {
+            const senderName = participant._id.toString() === data.sender.toString() ? "You" : populated.sender.name;
+            lastMessageText = `${senderName}: ${lastMessageText}`;
+          }
+
+          console.log(`📤 Emitting sidebar-message-update to ${participant._id}: unreadCount=${unreadCount}, viewing=${isViewingChat}`);
+
+          io.to(participant._id.toString()).emit("sidebar-message-update", {
+            chatId: data.chatId.toString(),
+            lastMessageText,
+            lastMessageCreatedAt: populated.createdAt.toISOString(),
+            unreadCount,
+            scope: participant._id.toString() === data.sender.toString() ? "for-me" : "for-everyone",
+            isGroup: !!groupChat,
+            isViewingChat: isViewingChat,
+            isNewMessage: true
+          });
+        }
       } catch (err) {
         console.error("❌ SOCKET MESSAGE ERROR:", err);
       }

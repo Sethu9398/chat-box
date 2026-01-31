@@ -148,6 +148,41 @@ const updateProfile = async (req, res) => {
 
     await user.save();
 
+    // Emit profile update to all users who have chats with this user
+    const io = req.app.get("io");
+
+    // Find all chats where this user is a participant
+    const chats = await Chat.find({ participants: userId });
+    const groupChats = await GroupChat.find({ members: userId });
+
+    // Collect all unique user IDs who need to be notified
+    const usersToNotify = new Set();
+
+    chats.forEach(chat => {
+      chat.participants.forEach(participantId => {
+        if (participantId.toString() !== userId.toString()) {
+          usersToNotify.add(participantId.toString());
+        }
+      });
+    });
+
+    groupChats.forEach(group => {
+      group.members.forEach(memberId => {
+        if (memberId.toString() !== userId.toString()) {
+          usersToNotify.add(memberId.toString());
+        }
+      });
+    });
+
+    // Emit profile update to all affected users
+    usersToNotify.forEach(userIdToNotify => {
+      io.to(userIdToNotify).emit("profile-updated", {
+        userId: userId.toString(),
+        name: user.name,
+        avatar: user.avatar
+      });
+    });
+
     res.status(200).json({
       message: "Profile updated successfully",
       user,

@@ -99,7 +99,7 @@ function Sidebar() {
   } = useGetSidebarUsersQuery();
 
   const { data: recentMessages = [] } = useGetRecentMessagesQuery();
-  const { data: groups = [] } = useGetMyGroupsQuery();
+  const { data: groups = [], refetch: refetchGroups } = useGetMyGroupsQuery();
 
   // Update current time every 60 seconds for lastSeen display
   useEffect(() => {
@@ -126,16 +126,27 @@ function Sidebar() {
   /* REAL-TIME SIDEBAR UPDATES */
   useEffect(() => {
     const messageUpdateHandler = (data) => {
-      console.log("📩 Sidebar message update received:", data);
+      console.log("📨 Received sidebar-message-update:", data.chatId, "unreadCount:", data.unreadCount, "scope:", data.scope);
+      
       // Check if it's a group message
-      if (data.isGroup || groups.some(g => g._id.toString() === data.chatId.toString())) {
-        // Update group cache with sorting in single operation to avoid race conditions
+      if (data.isGroup) {
         dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
-          const group = draft.find(g => g._id.toString() === data.chatId.toString());
+          const group = draft.find(g => String(g._id) === String(data.chatId));
           if (group) {
-            group.lastMessage = data.lastMessageText;
-            group.lastMessageCreatedAt = data.lastMessageCreatedAt || (data.groupUpdatedAt ? data.groupUpdatedAt : new Date().toISOString());
-            group.unreadCount = data.unreadCount || 0;
+            console.log("✏️ Updating group:", group.name, "lastMessage:", data.lastMessageText?.substring(0, 30));
+            
+            // Update lastMessage and timestamp
+            if (data.lastMessageText) {
+              group.lastMessage = data.lastMessageText;
+            }
+            if (data.lastMessageCreatedAt) {
+              group.lastMessageCreatedAt = data.lastMessageCreatedAt;
+            }
+            
+            // Update unread count only if provided
+            if (typeof data.unreadCount === "number") {
+              group.unreadCount = data.unreadCount;
+            }
           }
           // Sort by lastMessageCreatedAt descending
           draft.sort((a, b) => {
@@ -147,114 +158,30 @@ function Sidebar() {
         return;
       }
 
-      // If not a group, handle private chat
-      if (data.scope === "for-me") {
-        // Check if it's a group message
-        if (data.isGroup) {
-          // Update group cache for sender with sorting in single operation
-          dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
-            const group = draft.find(g => g._id.toString() === data.chatId.toString());
-            if (group) {
-              group.lastMessage = data.lastMessageText;
-              group.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
-              group.unreadCount = data.unreadCount || 0;
-            }
-            // Sort by lastMessageCreatedAt descending
-            draft.sort((a, b) => {
-              const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
-              const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
-              return bTime - aTime;
-            });
-          }));
-        } else {
-          // Update private chat cache for sender
-          dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
-            const chatUser = draft.find(u => u.chatId === data.chatId);
-            if (chatUser) {
-              chatUser.lastMessage = data.lastMessageText;
-              chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString(); // Use provided or set to now
-              chatUser.unreadCount = data.unreadCount || 0;
-            }
-            // Sort by lastMessageCreatedAt descending
-            draft.sort((a, b) => {
-              const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
-              const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
-              return bTime - aTime;
-            });
-          }));
+      // Handle private chats
+      dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+        const chatUser = draft.find(u => String(u.chatId) === String(data.chatId));
+        if (chatUser) {
+          // Update lastMessage and timestamp
+          if (data.lastMessageText) {
+            chatUser.lastMessage = data.lastMessageText;
+          }
+          if (data.lastMessageCreatedAt) {
+            chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt;
+          }
+          
+          // Update unread count only if provided
+          if (typeof data.unreadCount === "number") {
+            chatUser.unreadCount = data.unreadCount;
+          }
         }
-      }
-      else if (data.scope === "read-update") {
-        // Update unread count to 0 and preserve/update lastMessage for this chat (both private and group)
-        // Don't sort on read-update to avoid reordering when user is viewing a group
-        // Check if it's a group
-        if (data.isGroup || groups.some(g => g._id.toString() === data.chatId.toString())) {
-          dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
-            const group = draft.find(g => g._id.toString() === data.chatId.toString());
-            if (group) {
-              group.unreadCount = 0;
-              // Update lastMessage and lastMessageCreatedAt if provided
-              if (data.lastMessageText) {
-                group.lastMessage = data.lastMessageText;
-                group.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
-              }
-            }
-          }));
-        } else {
-          // Private chat
-          dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
-            const chatUser = draft.find(u => u.chatId === data.chatId);
-            if (chatUser) {
-              chatUser.unreadCount = 0;
-              // Update lastMessage and lastMessageCreatedAt if provided
-              if (data.lastMessageText) {
-                chatUser.lastMessage = data.lastMessageText;
-                chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
-              }
-            }
-          }));
-        }
-      }
-      else if (data.scope === "for-everyone") {
-        // Check if it's a group
-        if (data.isGroup || groups.some(g => g._id.toString() === data.chatId.toString())) {
-          // Update group cache with sorting in single operation
-          dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
-            const group = draft.find(g => g._id.toString() === data.chatId.toString());
-            if (group) {
-              group.unreadCount = data.unreadCount || 0;
-              group.lastMessage = data.lastMessageText;
-              group.lastMessageCreatedAt = data.lastMessageCreatedAt || (data.groupUpdatedAt ? data.groupUpdatedAt : new Date().toISOString());
-            }
-            // Sort by lastMessageCreatedAt descending
-            draft.sort((a, b) => {
-              const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
-              const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
-              return bTime - aTime;
-            });
-          }));
-        } else {
-          // Directly update unreadCount in cache for real-time update (private chat)
-          dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
-            const chatUser = draft.find(u => u.chatId === data.chatId);
-            if (chatUser) {
-              chatUser.unreadCount = data.unreadCount || 0;
-              chatUser.lastMessage = data.lastMessageText;
-              chatUser.lastMessageCreatedAt = data.lastMessageCreatedAt || new Date().toISOString();
-            }
-            // Sort by lastMessageCreatedAt descending
-            draft.sort((a, b) => {
-              const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
-              const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
-              return bTime - aTime;
-            });
-          }));
-        }
-      }
-      else {
-        // Fallback: invalidate to refetch
-        dispatch(userApi.util.invalidateTags(["User"]));
-      }
+        // Sort by lastMessageCreatedAt descending
+        draft.sort((a, b) => {
+          const aTime = a.lastMessageCreatedAt ? new Date(a.lastMessageCreatedAt) : new Date(0);
+          const bTime = b.lastMessageCreatedAt ? new Date(b.lastMessageCreatedAt) : new Date(0);
+          return bTime - aTime;
+        });
+      }));
     };
 
     const handler = () => {
@@ -319,14 +246,19 @@ function Sidebar() {
     };
 
     const groupRemovedHandler = (data) => {
-      console.log("➖ Group removed:", data);
+      console.log("➖ Group removed:", data.groupId);
       // Remove the group from the cache
       dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
-        const index = draft.findIndex(g => g._id === data.groupId);
+        const index = draft.findIndex(g => String(g._id) === String(data.groupId));
         if (index !== -1) {
+          console.log("✅ Removed group from sidebar:", draft[index].name);
           draft.splice(index, 1);
         }
       }));
+      // Deselect group if it was selected
+      if (selectedGroup?._id === data.groupId) {
+        dispatch(setSelectedGroup(null));
+      }
     };
 
     const groupUpdatedHandler = (updatedGroup) => {
@@ -354,10 +286,38 @@ function Sidebar() {
     const connectHandler = () => {
       console.log("🔌 Socket connected, refetching sidebar");
       refetch();
+      refetchGroups();
     };
 
+    const handleSidebarMessageUpdate = (data) => {
+      console.log("🔔 SOCKET EVENT RECEIVED: sidebar-message-update", data);
+      messageUpdateHandler(data);
+    };
+
+    const profileUpdatedHandler = (data) => {
+      console.log("👤 Profile updated:", data);
+      // Update users cache and propagate name changes to group last messages
+      dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+        const user = draft.find(u => u._id === data.userId);
+        if (user) {
+          const oldName = user.name;
+          user.name = data.name;
+          user.avatar = data.avatar;
+          // Update groups lastMessage if it contains the old name
+          dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draftGroups) => {
+            draftGroups.forEach(group => {
+              if (group.lastMessage && group.lastMessage.startsWith(`${oldName}: `)) {
+                group.lastMessage = group.lastMessage.replace(`${oldName}: `, `${data.name}: `);
+              }
+            });
+          }));
+        }
+      }));
+    };
+
+    console.log("🎧 Setting up socket listeners for sidebar updates");
     socket.on("sidebar-update", handler);
-    socket.on("sidebar-message-update", messageUpdateHandler);
+    socket.on("sidebar-message-update", handleSidebarMessageUpdate);
     socket.on("new-message", newMessageHandler);
     socket.on("online-users", onlineUsersHandler);
     socket.on("user-status-update", userStatusUpdateHandler);
@@ -366,10 +326,11 @@ function Sidebar() {
     socket.on("group-removed", groupRemovedHandler);
     socket.on("group-updated", groupUpdatedHandler);
     socket.on("group-deleted", groupDeletedHandler);
+    socket.on("profile-updated", profileUpdatedHandler);
     socket.on("connect", connectHandler);
     return () => {
       socket.off("sidebar-update", handler);
-      socket.off("sidebar-message-update", messageUpdateHandler);
+      socket.off("sidebar-message-update", handleSidebarMessageUpdate);
       socket.off("new-message", newMessageHandler);
       socket.off("online-users", onlineUsersHandler);
       socket.off("user-status-update", userStatusUpdateHandler);
@@ -378,9 +339,33 @@ function Sidebar() {
       socket.off("group-removed", groupRemovedHandler);
       socket.off("group-updated", groupUpdatedHandler);
       socket.off("group-deleted", groupDeletedHandler);
+      socket.off("profile-updated", profileUpdatedHandler);
       socket.off("connect", connectHandler);
     };
-  }, [dispatch, refetch, currentUser?._id, groups]);
+  }, [dispatch, refetch, refetchGroups, currentUser?._id, groups]);
+
+  /* RESET UNREAD COUNT WHEN USER VIEWS A GROUP/CHAT */
+  useEffect(() => {
+    if (selectedGroup) {
+      console.log("👀 User viewing group:", selectedGroup.name, "- resetting unread count");
+      dispatch(chatApi.util.updateQueryData('getMyGroups', undefined, (draft) => {
+        const group = draft.find(g => String(g._id) === String(selectedGroup._id));
+        if (group) {
+          group.unreadCount = 0;
+          console.log("✅ Unread count reset for group:", group.name);
+        }
+      }));
+    } else if (selectedUser) {
+      console.log("👀 User viewing private chat:", selectedUser.name, "- resetting unread count");
+      dispatch(userApi.util.updateQueryData('getSidebarUsers', undefined, (draft) => {
+        const user = draft.find(u => String(u._id) === String(selectedUser._id));
+        if (user) {
+          user.unreadCount = 0;
+          console.log("✅ Unread count reset for user:", user.name);
+        }
+      }));
+    }
+  }, [selectedGroup?._id, selectedUser?._id, dispatch]);
 
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
@@ -411,16 +396,26 @@ function Sidebar() {
   const getLastMessage = (msg, isGroup = false) => {
     if (!msg) return "No messages yet";
     if (typeof msg === "string") {
+      // String messages come from sidebar-message-update events
+      // Could be:
+      // 1. System messages: "Vishnu FSD removed John Wick" (already has full text)
+      // 2. Regular messages: "Sender: text" format
       if (isGroup) {
-        // For real-time updates, msg is a formatted string like "Sender: text"
+        // Check if this is a system message or regular message
+        // System messages contain: " added ", " removed ", " left the group"
+        if (msg.includes(" added ") || msg.includes(" removed ") || msg.includes(" left the group")) {
+          // System message - display as-is
+          return msg.length > 60 ? msg.substring(0, 60) + "…" : msg;
+        }
+        // Regular message with "Sender: text" format
         const colonIndex = msg.indexOf(': ');
         if (colonIndex !== -1) {
-          const sender = msg.substring(0, colonIndex + 2);
           const text = msg.substring(colonIndex + 2);
           const truncatedText = text.length > 55 ? text.substring(0, 55) + "…" : text;
+          const sender = msg.substring(0, colonIndex + 2);
           return sender + truncatedText;
         } else {
-          return msg.length > 30 ? msg.substring(0, 30) + "…" : msg;
+          return msg.length > 60 ? msg.substring(0, 60) + "…" : msg;
         }
       } else {
         return msg;
@@ -430,6 +425,11 @@ function Sidebar() {
     // For group chats, format with sender name
     if (isGroup) {
       if (msg.deletedForAll) return "This message was deleted";
+
+      // Handle system messages
+      if (msg.type === "system") {
+        return msg.text.length > 60 ? msg.text.substring(0, 60) + "…" : msg.text;
+      }
 
       const senderName = msg.sender._id === currentUser._id ? "You" : msg.sender.name;
       let messageText = "";
